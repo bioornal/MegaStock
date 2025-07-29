@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getProducts, updateProduct, deleteProduct, registerSale } from '@/services/productService';
+import { BRANDS } from '@/lib/constants';
 import { Edit, Trash2, Check, X, Search, Filter } from 'lucide-react';
 
 // Definición de la interfaz del producto
@@ -30,7 +31,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
   const [sellQuantity, setSellQuantity] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
-  const [brands, setBrands] = useState<string[]>([]);
+  
 
   // Carga inicial de productos y configuración de marcas para el filtro
   const loadProducts = async () => {
@@ -38,8 +39,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
     try {
       const allProducts = await getProducts();
       setProducts(allProducts);
-      const uniqueBrands = Array.from(new Set(allProducts.map(p => p.brand)));
-      setBrands(uniqueBrands);
+      
     } catch (err) {
       setError('No se pudieron cargar los productos.');
     } finally {
@@ -131,7 +131,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
               onChange={(e) => setSelectedBrand(e.target.value)}
             >
               <option value="">Todas las marcas</option>
-              {brands.map(brand => (
+              {BRANDS.map(brand => (
                 <option key={brand} value={brand}>{brand}</option>
               ))}
             </select>

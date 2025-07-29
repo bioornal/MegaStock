@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { BRANDS } from '@/lib/constants';
 
 interface AddProductFormProps {
   onProductAdded: () => void;
@@ -10,7 +11,7 @@ interface AddProductFormProps {
 
 export default function AddProductForm({ onProductAdded, onCancel }: AddProductFormProps) {
   const [name, setName] = useState('');
-  const [brand, setBrand] = useState('');
+  const [brand, setBrand] = useState(''); // Default to empty to show placeholder
   const [stock, setStock] = useState('');
   const [price, setPrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,7 +57,12 @@ export default function AddProductForm({ onProductAdded, onCancel }: AddProductF
             </div>
             <div className="col-md-6">
               <label htmlFor="brand" className="form-label">Marca</label>
-              <input type="text" className="form-control" id="brand" value={brand} onChange={(e) => setBrand(e.target.value)} required />
+              <select id="brand" className="form-select" value={brand} onChange={(e) => setBrand(e.target.value)} required>
+                <option value="" disabled>Selecciona una marca</option>
+                {BRANDS.map(b => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
             </div>
             <div className="col-md-6">
               <label htmlFor="stock" className="form-label">Stock Inicial</label>
