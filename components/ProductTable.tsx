@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { Product, getProducts, updateProduct, deleteProduct, registerSale } from '@/services/productService';
+import { Product, getProducts, updateProduct, deleteProduct } from '@/services/productService';
 import { BRANDS } from '@/lib/constants';
 import { Edit, Trash2, Check, X, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDebounce, useLocalCache } from '@/lib/hooks';
@@ -17,9 +17,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [sellingId, setSellingId] = useState<number | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<Product>>({});
-  const [sellQuantity, setSellQuantity] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
   
@@ -92,21 +90,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
     }
   };
 
-  const handleSale = async (productId: number) => {
-    if (sellQuantity <= 0) {
-      alert('La cantidad debe ser mayor a cero.');
-      return;
-    }
-    try {
-      await registerSale(productId, sellQuantity);
-      setSellingId(null);
-      setSellQuantity(1);
-      loadProducts(false); // Forzar recarga sin cache
-      onProductsChange?.();
-    } catch (error: any) {
-      alert(error.message);
-    }
-  };
+
 
   const handleDelete = async (id: number) => {
     if (confirm('¿Seguro que quieres eliminar este producto?')) {
@@ -233,7 +217,6 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
               <th>Color</th>
               <th>Stock</th>
               <th>Precio</th>
-              <th className="text-center">Vender</th>
               <th className="text-center">Acciones</th>
             </tr>
           </thead>
@@ -245,20 +228,6 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
                 <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.color || ''} onChange={(e) => setEditFormData({...editFormData, color: e.target.value})} /> : (product.color || '-')}</td>
                 <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.stock} onChange={(e) => setEditFormData({...editFormData, stock: parseInt(e.target.value)})} /> : product.stock}</td>
                 <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: parseFloat(e.target.value)})} /> : `$${product.price.toLocaleString('es-CL')}`}</td>
-                
-                <td className="text-center">
-                  {sellingId === product.id ? (
-                    <div className="input-group input-group-sm" style={{width: '150px'}}>
-                      <input type="number" className="form-control" value={sellQuantity} onChange={(e) => setSellQuantity(parseInt(e.target.value))} min="1" max={product.stock} onKeyDown={(e) => e.key === 'Enter' && handleSale(product.id)} />
-                      <button className="btn btn-success" onClick={() => handleSale(product.id)}><Check size={16} /></button>
-                      <button className="btn btn-secondary" onClick={() => setSellingId(null)}><X size={16} /></button>
-                    </div>
-                  ) : (
-                    <button className="btn btn-success btn-sm" onClick={() => setSellingId(product.id)} disabled={product.stock === 0}>
-                      Vender
-                    </button>
-                  )}
-                </td>
 
                 <td className="text-center">
                   {editingId === product.id ? (

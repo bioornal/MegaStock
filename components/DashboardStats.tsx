@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { getProducts } from '@/services/productService';
-import { Package, Archive, AlertTriangle, DollarSign } from 'lucide-react';
+import { Package, Archive, TrendingDown, DollarSign, AlertTriangle } from 'lucide-react';
 import LowStockModal from './LowStockModal';
 import DashboardCharts from './DashboardCharts';
+import MonthlySalesCard from './MonthlySalesCard';
 
 interface StatCardProps {
   title: string;
@@ -85,6 +86,9 @@ const DashboardStats = () => {
   return (
     <div>
       <h4 className='mb-3 fw-bold'>Resumen General</h4>
+      
+      {/* Card de ventas mensuales */}
+      <MonthlySalesCard />
       <StatCard 
         title="Total Productos" 
         value={totalProducts} 
