@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Product, getProducts, updateProduct, deleteProduct, registerSale } from '@/services/productService';
 import { BRANDS } from '@/lib/constants';
-import { Edit, Trash2, Check, X, Search, Filter } from 'lucide-react';
-
-// Definición de la interfaz del producto
-
+import { Edit, Trash2, Check, X, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useDebounce, useLocalCache } from '@/lib/hooks';
 
 // Props del componente
 interface ProductTableProps {
@@ -25,14 +23,35 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
   
+  // Estados para paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(20); // 20 productos por página
+  
+  // Cache local y debounce
+  const [cachedProducts, setCachedProducts] = useLocalCache<Product[]>('megastock_products', []);
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  // Carga inicial de productos y configuración de marcas para el filtro
-  const loadProducts = async () => {
+  // Carga inicial de productos
+  const loadProducts = async (useCache = true) => {
     setIsLoading(true);
     try {
-      const allProducts = await getProducts();
-      setProducts(allProducts);
-      
+      // Si hay cache y se permite usarlo, usar cache primero
+      if (useCache && cachedProducts.length > 0) {
+        setProducts(cachedProducts);
+        setIsLoading(false);
+        
+        // Cargar en background para actualizar cache
+        const freshProducts = await getProducts();
+        if (JSON.stringify(freshProducts) !== JSON.stringify(cachedProducts)) {
+          setProducts(freshProducts);
+          setCachedProducts(freshProducts);
+        }
+      } else {
+        // Carga completa
+        const allProducts = await getProducts();
+        setProducts(allProducts);
+        setCachedProducts(allProducts);
+      }
     } catch (err) {
       setError('No se pudieron cargar los productos.');
     } finally {
@@ -66,7 +85,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
         return;
       }
       setEditingId(null);
-      loadProducts();
+      loadProducts(false); // Forzar recarga sin cache
       onProductsChange?.();
     } catch (error) {
       alert('Error al actualizar el producto.');
@@ -82,7 +101,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
       await registerSale(productId, sellQuantity);
       setSellingId(null);
       setSellQuantity(1);
-      loadProducts();
+      loadProducts(false); // Forzar recarga sin cache
       onProductsChange?.();
     } catch (error: any) {
       alert(error.message);
@@ -96,25 +115,74 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
         await deleteProduct(id);
       } else if (password !== null) {
         alert("Contraseña incorrecta.");
+        return;
       }
-      loadProducts();
+      loadProducts(false); // Forzar recarga sin cache
       onProductsChange?.();
     }
   };
   
-  // Filtrado de productos
-  const filteredProducts = products
-    .filter(product => selectedBrand ? product.brand === selectedBrand : true)
-    .filter(product =>
-      {
-        const term = searchTerm.toLowerCase();
+  // Filtrado de productos con debounce
+  const filteredProducts = useMemo(() => {
+    return products
+      .filter(product => selectedBrand ? product.brand === selectedBrand : true)
+      .filter(product => {
+        const term = debouncedSearchTerm.toLowerCase();
         return product.name.toLowerCase().includes(term) ||
                product.brand.toLowerCase().includes(term) ||
                (product.color && product.color.toLowerCase().includes(term));
-      }
-    );
+      });
+  }, [products, selectedBrand, debouncedSearchTerm]);
 
-  if (isLoading) return <div className="text-center"><div className="spinner-border" role="status"><span className="visually-hidden">Cargando...</span></div></div>;
+  // Cálculos de paginación
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentProducts = filteredProducts.slice(startIndex, endIndex);
+
+  // Reset página cuando cambian los filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, selectedBrand]);
+
+  // Componente de paginación
+  const PaginationControls = () => (
+    <div className="d-flex justify-content-between align-items-center mt-3">
+      <div className="text-muted small">
+        Mostrando {startIndex + 1}-{Math.min(endIndex, filteredProducts.length)} de {filteredProducts.length} productos
+      </div>
+      <div className="d-flex align-items-center gap-2">
+        <button 
+          className="btn btn-outline-secondary btn-sm"
+          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <span className="mx-2 small">
+          Página {currentPage} de {totalPages}
+        </span>
+        <button 
+          className="btn btn-outline-secondary btn-sm"
+          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+          disabled={currentPage === totalPages}
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+
+  if (isLoading && products.length === 0) {
+    return (
+      <div className="text-center">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Cargando...</span>
+        </div>
+      </div>
+    );
+  }
+  
   if (error) return <div className="alert alert-danger">{error}</div>;
 
   return (
@@ -126,7 +194,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
             <input
               type="text"
               className="form-control"
-              placeholder="Buscar por nombre o marca..."
+              placeholder="Buscar por nombre, marca o color..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -149,6 +217,13 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
         </div>
       </div>
 
+      {/* Indicador de carga en background */}
+      {isLoading && products.length > 0 && (
+        <div className="alert alert-info py-2 mb-3">
+          <small>Actualizando datos...</small>
+        </div>
+      )}
+
       <div className="table-responsive">
         <table className="table table-hover align-middle">
           <thead className="table-dark">
@@ -163,7 +238,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
             </tr>
           </thead>
           <tbody>
-            {filteredProducts.map(product => (
+            {currentProducts.map(product => (
               <tr key={product.id}>
                 <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.name} onChange={(e) => setEditFormData({...editFormData, name: e.target.value})} /> : <strong>{product.name.toUpperCase()}</strong>}</td>
                 <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.brand} onChange={(e) => setEditFormData({...editFormData, brand: e.target.value})} /> : product.brand}</td>
@@ -203,6 +278,16 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
           </tbody>
         </table>
       </div>
+
+      {/* Controles de paginación */}
+      {totalPages > 1 && <PaginationControls />}
+      
+      {/* Mensaje cuando no hay resultados */}
+      {filteredProducts.length === 0 && !isLoading && (
+        <div className="text-center py-4 text-muted">
+          No se encontraron productos que coincidan con los filtros aplicados.
+        </div>
+      )}
     </div>
   );
 };
