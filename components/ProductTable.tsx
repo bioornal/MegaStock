@@ -1,19 +1,12 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { getProducts, updateProduct, deleteProduct, registerSale } from '@/services/productService';
+import { Product, getProducts, updateProduct, deleteProduct, registerSale } from '@/services/productService';
 import { BRANDS } from '@/lib/constants';
 import { Edit, Trash2, Check, X, Search, Filter } from 'lucide-react';
 
 // Definición de la interfaz del producto
-interface Product {
-  id: number;
-  name: string;
-  brand: string;
-  stock: number;
-  price: number;
-  image: string;
-}
+
 
 // Props del componente
 interface ProductTableProps {
@@ -63,7 +56,15 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
       return;
     }
     try {
-      await updateProduct(id, editFormData as Product);
+      const password = prompt("Para actualizar este producto, por favor introduce la contraseña:");
+      if (password === "110685") {
+        await updateProduct(id, editFormData as Product);
+      } else if (password !== null) {
+        alert("Contraseña incorrecta.");
+        return;
+      } else {
+        return;
+      }
       setEditingId(null);
       loadProducts();
       onProductsChange?.();
@@ -90,7 +91,12 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
 
   const handleDelete = async (id: number) => {
     if (confirm('¿Seguro que quieres eliminar este producto?')) {
-      await deleteProduct(id);
+      const password = prompt("Para eliminar este producto, por favor introduce la contraseña:");
+      if (password === "110685") {
+        await deleteProduct(id);
+      } else if (password !== null) {
+        alert("Contraseña incorrecta.");
+      }
       loadProducts();
       onProductsChange?.();
     }
@@ -100,8 +106,12 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
   const filteredProducts = products
     .filter(product => selectedBrand ? product.brand === selectedBrand : true)
     .filter(product =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.brand.toLowerCase().includes(searchTerm.toLowerCase())
+      {
+        const term = searchTerm.toLowerCase();
+        return product.name.toLowerCase().includes(term) ||
+               product.brand.toLowerCase().includes(term) ||
+               (product.color && product.color.toLowerCase().includes(term));
+      }
     );
 
   if (isLoading) return <div className="text-center"><div className="spinner-border" role="status"><span className="visually-hidden">Cargando...</span></div></div>;
@@ -145,6 +155,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
             <tr>
               <th>Producto</th>
               <th>Marca</th>
+              <th>Color</th>
               <th>Stock</th>
               <th>Precio</th>
               <th className="text-center">Vender</th>
@@ -156,6 +167,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
               <tr key={product.id}>
                 <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.name} onChange={(e) => setEditFormData({...editFormData, name: e.target.value})} /> : <strong>{product.name.toUpperCase()}</strong>}</td>
                 <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.brand} onChange={(e) => setEditFormData({...editFormData, brand: e.target.value})} /> : product.brand}</td>
+                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.color || ''} onChange={(e) => setEditFormData({...editFormData, color: e.target.value})} /> : (product.color || '-')}</td>
                 <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.stock} onChange={(e) => setEditFormData({...editFormData, stock: parseInt(e.target.value)})} /> : product.stock}</td>
                 <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: parseFloat(e.target.value)})} /> : `$${product.price.toLocaleString('es-CL')}`}</td>
                 

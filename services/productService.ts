@@ -4,6 +4,7 @@ export interface Product {
   id: number;
   name: string;
   brand: string;
+  color?: string; // Color es opcional para productos existentes
   stock: number;
   price: number;
   image: string;
@@ -89,6 +90,60 @@ export const addProduct = async (productData: Omit<Product, 'id'>): Promise<Prod
     throw error;
   }
   return data;
+};
+
+// Incrementar stock de un producto existente
+export const incrementStock = async (productId: number, quantity: number): Promise<Product> => {
+  // Primero obtenemos el producto actual
+  const { data: currentProduct, error: fetchError } = await supabase
+    .from('products')
+    .select('*')
+    .eq('id', productId)
+    .single();
+
+  if (fetchError) {
+    console.error('Error fetching product:', fetchError);
+    throw fetchError;
+  }
+
+  // Calculamos el nuevo stock
+  const newStock = currentProduct.stock + quantity;
+
+  // Actualizamos el stock
+  const { data, error } = await supabase
+    .from('products')
+    .update({ stock: newStock })
+    .eq('id', productId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating stock:', error);
+    throw error;
+  }
+
+  return data;
+};
+
+// Actualizar stock de múltiples productos de forma masiva
+export const bulkIncrementStock = async (updates: { productId: number; quantity: number }[]): Promise<Product[]> => {
+  const updatedProducts: Product[] = [];
+  const errors: string[] = [];
+
+  for (const update of updates) {
+    try {
+      const updatedProduct = await incrementStock(update.productId, update.quantity);
+      updatedProducts.push(updatedProduct);
+    } catch (error) {
+      errors.push(`Error actualizando producto ID ${update.productId}: ${error}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Algunos productos no se pudieron actualizar: ${errors.join(', ')}`);
+  }
+
+  return updatedProducts;
 };
 
 // Eliminar un producto

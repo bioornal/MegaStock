@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Home, Package } from 'lucide-react';
+import { Home, Package, Plus } from 'lucide-react';
 
 export default function Navbar() {
   return (
@@ -24,6 +24,12 @@ export default function Navbar() {
               <Link href="/" className="nav-link d-flex align-items-center">
                 <Package className="me-1" size={20} />
                 Productos
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/stock" className="nav-link d-flex align-items-center">
+                <Plus className="me-1" size={20} />
+                Actualizar Stock
               </Link>
             </li>
           </ul>

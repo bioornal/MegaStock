@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { BRANDS } from '@/lib/constants';
+import { BRANDS, COLORS_BY_BRAND } from '@/lib/productOptions';
 
 interface AddProductFormProps {
   onProductAdded: () => void;
@@ -11,16 +11,28 @@ interface AddProductFormProps {
 
 export default function AddProductForm({ onProductAdded, onCancel }: AddProductFormProps) {
   const [name, setName] = useState('');
-  const [brand, setBrand] = useState(''); // Default to empty to show placeholder
+  const [brand, setBrand] = useState('');
+  const [color, setColor] = useState('');
+  const [availableColors, setAvailableColors] = useState<string[]>([]);
   const [stock, setStock] = useState('');
   const [price, setPrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Actualizar colores disponibles cuando cambia la marca
+  useEffect(() => {
+    if (brand && COLORS_BY_BRAND[brand]) {
+      setAvailableColors(COLORS_BY_BRAND[brand]);
+      setColor(''); // Reset color selection
+    } else {
+      setAvailableColors([]);
+    }
+  }, [brand]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    if (!name || !brand || !stock || !price) {
+    if (!name || !brand || !stock || !price || (availableColors.length > 0 && !color)) {
       alert('Por favor, completa todos los campos.');
       setIsSubmitting(false);
       return;
@@ -31,6 +43,7 @@ export default function AddProductForm({ onProductAdded, onCancel }: AddProductF
       .insert([{ 
         name,
         brand,
+        color,
         stock: parseInt(stock, 10),
         price: parseFloat(price)
       }]);
@@ -61,6 +74,15 @@ export default function AddProductForm({ onProductAdded, onCancel }: AddProductF
                 <option value="" disabled>Selecciona una marca</option>
                 {BRANDS.map(b => (
                   <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-6">
+              <label htmlFor="color" className="form-label">Color</label>
+              <select id="color" className="form-select" value={color} onChange={(e) => setColor(e.target.value)} required disabled={availableColors.length === 0}>
+                <option value="" disabled>Selecciona un color</option>
+                {availableColors.map(c => (
+                  <option key={c} value={c}>{c}</option>
                 ))}
               </select>
             </div>
