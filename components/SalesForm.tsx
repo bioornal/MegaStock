@@ -15,7 +15,9 @@ interface SalesFormProps {
 interface SaleItem {
   product: Product;
   quantity: number;
+  unitPrice: number; // Precio unitario editable
   paymentMethod: 'cash' | 'card' | 'qr' | 'transfer';
+  applyPromotion: boolean; // Checkbox para promo 2x1
 }
 
 const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
@@ -98,13 +100,24 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
 
   const addSaleItem = (product: Product) => {
     const existingIndex = salesItems.findIndex(item => item.product.id === product.id);
+
     if (existingIndex >= 0) {
-      updateSaleItem(existingIndex, 'quantity', salesItems[existingIndex].quantity + 1);
+      // Correctamente actualiza el estado de forma inmutable
+      const updatedItems = salesItems.map((item, index) => {
+        if (index === existingIndex) {
+          return { ...item, quantity: item.quantity + 1 };
+        }
+        return item;
+      });
+      setSalesItems(updatedItems);
     } else {
+      // Agrega un nuevo producto a la lista
       setSalesItems([...salesItems, {
         product,
         quantity: 1,
-        paymentMethod: 'cash'
+        unitPrice: product.price,
+        paymentMethod: 'cash',
+        applyPromotion: false
       }]);
     }
     setSearchTerm(''); // Limpiar búsqueda después de agregar
@@ -125,7 +138,9 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
           recoveredItems.push({
             product,
             quantity: draftItem.quantity,
-            paymentMethod: draftItem.paymentMethod
+            unitPrice: product.price, // Usar precio actual del producto
+            paymentMethod: draftItem.paymentMethod,
+            applyPromotion: false
           });
         }
       }
@@ -154,14 +169,29 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
   };
 
   const updateSaleItem = (index: number, field: keyof SaleItem, value: any) => {
-    const updated = [...salesItems];
-    updated[index] = { ...updated[index], [field]: value };
-    setSalesItems(updated);
+    const updatedItems = salesItems.map((item, i) => {
+      if (i === index) {
+        const updatedItem = { ...item, [field]: value };
+
+        // Si la cantidad es menor a 2, desactivar la promoción automáticamente
+        if (field === 'quantity' && updatedItem.quantity < 2) {
+          updatedItem.applyPromotion = false;
+        }
+        
+        return updatedItem;
+      }
+      return item;
+    });
+    setSalesItems(updatedItems);
   };
 
   const calculateTotal = () => {
     return salesItems.reduce((total, item) => {
-      return total + (item.product.price * item.quantity);
+      let itemTotal = item.unitPrice * item.quantity;
+      if (item.applyPromotion && item.quantity >= 2) {
+        itemTotal -= item.unitPrice; // Descontar el valor de una unidad
+      }
+      return total + itemTotal;
     }, 0);
   };
 
@@ -191,8 +221,10 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
           cash_session_id: cashSession.id,
           product_id: item.product.id,
           quantity: item.quantity,
-          unit_price: item.product.price,
-          total_amount: item.product.price * item.quantity,
+          unit_price: item.unitPrice,
+          total_amount: item.applyPromotion && item.quantity >= 2
+            ? item.unitPrice * (item.quantity - 1)
+            : item.unitPrice * item.quantity,
           payment_method: item.paymentMethod
         });
       }
@@ -359,55 +391,92 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
                 No hay productos agregados
               </div>
             ) : (
-              salesItems.map((item, index) => (
-                <div key={index} className="border rounded p-3 mb-2">
-                  <div className="row align-items-center">
-                    <div className="col-md-4">
-                      <strong>{item.product.name}</strong>
-                      <br />
-                      <small className="text-muted">{item.product.brand}</small>
-                      <br />
-                      <small>Stock disponible: {products.find(p => p.id === item.product.id)?.stock || 0}</small>
-                    </div>
-                    <div className="col-md-2">
-                      <input
-                        type="number"
-                        className="form-control"
-                        min="1"
-                        max={item.product.stock}
-                        value={item.quantity}
-                        onChange={(e) => updateSaleItem(index, 'quantity', parseInt(e.target.value) || 1)}
-                      />
-                    </div>
-                    <div className="col-md-3">
-                      <select
-                        className="form-select"
-                        value={item.paymentMethod}
-                        onChange={(e) => updateSaleItem(index, 'paymentMethod', e.target.value)}
-                      >
-                        <option value="cash">💵 Efectivo</option>
-                        <option value="card">💳 Tarjeta</option>
-                        <option value="qr">📱 QR</option>
-                        <option value="transfer">🏦 Transferencia</option>
-                      </select>
-                    </div>
-                    <div className="col-md-2">
-                      <div className="fw-bold">
-                        ${(item.product.price * item.quantity).toLocaleString('es-CL')}
+              salesItems.map((item, index) => {
+                const totalItemPrice = item.applyPromotion && item.quantity >= 2 
+                  ? (item.unitPrice * (item.quantity - 1)) 
+                  : (item.unitPrice * item.quantity);
+
+                return (
+                  <div key={index} className={`border rounded p-3 mb-2 ${item.applyPromotion && item.quantity >= 2 ? 'border-success' : ''}`}>
+                    <div className="row align-items-center">
+                      <div className="col-md-3">
+                        <strong>{item.product.name}</strong>
+                        <br />
+                        <small className="text-muted">{item.product.brand} / {item.product.color || 'N/A'}</small>
+                      </div>
+                      <div className="col-md-2">
+                        <label className="form-label small">Precio Unit.</label>
+                        <div className="input-group input-group-sm">
+                          <span className="input-group-text">$</span>
+                          <input
+                            type="number"
+                            className="form-control"
+                            min="0"
+                            value={item.unitPrice}
+                            onChange={(e) => updateSaleItem(index, 'unitPrice', parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-2">
+                        <label className="form-label small">Cantidad</label>
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          min="1"
+                          max={item.product.stock}
+                          value={item.quantity}
+                          onChange={(e) => updateSaleItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                        />
+                      </div>
+                      <div className="col-md-2">
+                        <label className="form-label small">Total</label>
+                        <div className="fw-bold">
+                          ${totalItemPrice.toLocaleString('es-CL')}
+                        </div>
+                      </div>
+                      <div className="col-md-2">
+                        <label className="form-label small">Método Pago</label>
+                        <select
+                          className="form-select form-select-sm"
+                          value={item.paymentMethod}
+                          onChange={(e) => updateSaleItem(index, 'paymentMethod', e.target.value as SaleItem['paymentMethod'])}
+                        >
+                          <option value="cash">💵 Efectivo</option>
+                          <option value="card">💳 Tarjeta</option>
+                          <option value="qr">📱 QR</option>
+                          <option value="transfer">🏦 Transferencia</option>
+                        </select>
+                      </div>
+                      <div className="col-md-1 text-end">
+                        <button
+                          type="button"
+                          className="btn btn-outline-danger btn-sm"
+                          onClick={() => removeSaleItem(index)}
+                          title="Eliminar producto"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </div>
-                    <div className="col-md-1">
-                      <button
-                        type="button"
-                        className="btn btn-outline-danger btn-sm"
-                        onClick={() => removeSaleItem(index)}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+                    {item.quantity >= 2 && (
+                      <div className="mt-2 pt-2 border-top">
+                        <div className="form-check">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            checked={item.applyPromotion}
+                            onChange={(e) => updateSaleItem(index, 'applyPromotion', e.target.checked)}
+                            id={`promo-${index}`}
+                          />
+                          <label className="form-check-label text-success fw-bold" htmlFor={`promo-${index}`}>
+                            🎉 Aplicar promoción 2x1 (1 unidad gratis)
+                          </label>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
