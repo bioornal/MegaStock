@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { Home, Package, Plus, ShoppingCart } from 'lucide-react';
+import AuthButton from './AuthButton';
 
-export default function Navbar() {
+export default async function Navbar() {
+
   return (
     <nav className="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
       <div className="container-fluid">
@@ -13,7 +15,7 @@ export default function Navbar() {
           <span className="navbar-toggler-icon"></span>
         </button>
         <div className="collapse navbar-collapse" id="navbarNav">
-          <ul className="navbar-nav ms-auto">
+          <ul className="navbar-nav me-auto mb-2 mb-lg-0">
             <li className="nav-item">
               <Link href="/" className="nav-link d-flex align-items-center active">
                 <Home className="me-1" size={20} />
@@ -39,6 +41,7 @@ export default function Navbar() {
               </Link>
             </li>
           </ul>
+          <AuthButton />
         </div>
       </div>
     </nav>
