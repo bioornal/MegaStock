@@ -39,12 +39,9 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
           getProducts(),
           getSalesBySession(cashSession.id)
         ]);
-        const availableProducts = productsData.filter(p => p.stock > 0);
-        setProducts(availableProducts);
-        setFilteredProducts(availableProducts);
+        setProducts(productsData);
         setRecentSales(salesData);
         
-        // Verificar si hay draft pendiente
         const pendingDraft = salesPersistence.hasPendingDrafts(cashSession.vendor_id, cashSession.id);
         setHasPendingDraft(pendingDraft);
         
@@ -58,24 +55,31 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
     };
 
     fetchData();
-    
-    // Limpiar drafts expirados al cargar
-    salesPersistence.cleanExpiredDrafts();
   }, [cashSession.id, cashSession.vendor_id]);
 
-  // Filtrar productos basado en búsqueda
+  // Filtrar productos basado en búsqueda y stock disponible en el carrito
   useEffect(() => {
+    const itemsInCart = salesItems.reduce((acc, item) => {
+      acc[item.product.id] = item.quantity;
+      return acc;
+    }, {} as { [key: string]: number });
+
+    const availableProducts = products.filter(p => {
+      const quantityInCart = itemsInCart[p.id] || 0;
+      return p.stock > quantityInCart;
+    });
+
     if (debouncedSearchTerm.trim() === '') {
-      setFilteredProducts(products);
+      setFilteredProducts([]);
     } else {
-      const filtered = products.filter(product => 
+      const filtered = availableProducts.filter(product => 
         product.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
         product.brand.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
         (product.color && product.color.toLowerCase().includes(debouncedSearchTerm.toLowerCase()))
       );
-      setFilteredProducts(filtered.slice(0, 10)); // Limitar a 10 resultados
+      setFilteredProducts(filtered.slice(0, 10));
     }
-  }, [debouncedSearchTerm, products]);
+  }, [debouncedSearchTerm, products, salesItems]);
 
   // Auto-guardado cuando cambian los items de venta
   useEffect(() => {
@@ -98,29 +102,45 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
     };
   }, [cashSession.vendor_id, cashSession.id, salesItems]);
 
+  const handleQuantityChange = (index: number, newQuantity: number) => {
+    const item = salesItems[index];
+    if (!item) return;
+
+    const quantity = Math.max(1, Math.min(newQuantity, item.product.stock));
+
+    const updatedItems = salesItems.map((it, i) => {
+        if (i === index) {
+            const updatedItem = { ...it, quantity };
+            if (quantity < 2) {
+                updatedItem.applyPromotion = false;
+            }
+            return updatedItem;
+        }
+        return it;
+    });
+    setSalesItems(updatedItems);
+  };
+
   const addSaleItem = (product: Product) => {
     const existingIndex = salesItems.findIndex(item => item.product.id === product.id);
 
     if (existingIndex >= 0) {
-      // Correctamente actualiza el estado de forma inmutable
-      const updatedItems = salesItems.map((item, index) => {
-        if (index === existingIndex) {
-          return { ...item, quantity: item.quantity + 1 };
-        }
-        return item;
-      });
-      setSalesItems(updatedItems);
+      const item = salesItems[existingIndex];
+      if (item.quantity < item.product.stock) {
+        handleQuantityChange(existingIndex, item.quantity + 1);
+      }
     } else {
-      // Agrega un nuevo producto a la lista
-      setSalesItems([...salesItems, {
-        product,
-        quantity: 1,
-        unitPrice: product.price,
-        paymentMethod: 'cash',
-        applyPromotion: false
-      }]);
+      if (product.stock > 0) {
+        setSalesItems([...salesItems, {
+          product,
+          quantity: 1,
+          unitPrice: product.price,
+          paymentMethod: 'cash',
+          applyPromotion: false
+        }]);
+      }
     }
-    setSearchTerm(''); // Limpiar búsqueda después de agregar
+    setSearchTerm('');
   };
 
   // Recuperar draft pendiente
