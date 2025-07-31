@@ -106,15 +106,32 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
     }
   };
   
-  // Filtrado de productos con debounce
+  // Helper para normalizar strings (ignorar tildes y mayúsculas)
+  const normalizeText = (text: string | undefined | null): string => {
+    if (!text) return '';
+    return text
+      .normalize('NFD') // Separa caracteres de sus acentos
+      .replace(/[\u0300-\u036f]/g, '') // Elimina los acentos
+      .toLowerCase(); // Convierte a minúsculas
+  };
+
+  // Filtrado de productos con debounce y normalización
   const filteredProducts = useMemo(() => {
+    const normalizedTerm = normalizeText(debouncedSearchTerm);
+
+    if (!normalizedTerm && !selectedBrand) {
+      return products;
+    }
+
     return products
-      .filter(product => selectedBrand ? product.brand === selectedBrand : true)
+      .filter(product => selectedBrand ? normalizeText(product.brand) === normalizeText(selectedBrand) : true)
       .filter(product => {
-        const term = debouncedSearchTerm.toLowerCase();
-        return product.name.toLowerCase().includes(term) ||
-               product.brand.toLowerCase().includes(term) ||
-               (product.color && product.color.toLowerCase().includes(term));
+        if (!normalizedTerm) return true;
+        return (
+          normalizeText(product.name).includes(normalizedTerm) ||
+          normalizeText(product.brand).includes(normalizedTerm) ||
+          normalizeText(product.color).includes(normalizedTerm)
+        );
       });
   }, [products, selectedBrand, debouncedSearchTerm]);
 

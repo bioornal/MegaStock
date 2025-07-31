@@ -4,7 +4,7 @@ export const BRANDS = [
   'Molufan',
   'Super Espuma',
   'Piero',
-  'San José',
+  'San Jose',
   'Moval',
   'DJ'
 ];
