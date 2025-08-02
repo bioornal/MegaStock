@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Home, Package, Plus, ShoppingCart } from 'lucide-react';
+import { Home, Package, Plus, ShoppingCart, FileText } from 'lucide-react';
 import AuthButton from './AuthButton';
 
 export default async function Navbar() {
@@ -32,6 +32,12 @@ export default async function Navbar() {
               <Link href="/sales" className="nav-link d-flex align-items-center">
                 <ShoppingCart className="me-1" size={20} />
                 Ventas
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/sales-registry" className="nav-link d-flex align-items-center">
+                <FileText className="me-1" size={20} />
+                Registro Ventas
               </Link>
             </li>
             <li className="nav-item">

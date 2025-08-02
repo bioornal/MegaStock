@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { getProducts } from '@/services/productService';
-import { Package, Archive, TrendingDown, DollarSign, AlertTriangle } from 'lucide-react';
+import { Package, Archive, TrendingDown, DollarSign, AlertTriangle, FileText } from 'lucide-react';
 import LowStockModal from './LowStockModal';
 import DashboardCharts from './DashboardCharts';
 import MonthlySalesCard from './MonthlySalesCard';
+import TopSellingProductsCard from './TopSellingProductsCard';
+import { useRouter } from 'next/navigation';
 
 interface StatCardProps {
   title: string;
@@ -48,10 +50,10 @@ const StatCard = ({ title, value, icon, color, onClick, clickable = false }: Sta
 );
 
 const DashboardStats = () => {
+  const router = useRouter();
   const [totalProducts, setTotalProducts] = useState(0);
   const [totalStock, setTotalStock] = useState(0);
   const [lowStockProducts, setLowStockProducts] = useState(0);
-  const [totalCapital, setTotalCapital] = useState('0.00');
   const [isLoading, setIsLoading] = useState(true);
   const [showLowStockModal, setShowLowStockModal] = useState(false);
 
@@ -60,12 +62,10 @@ const DashboardStats = () => {
       const products = await getProducts();
       const total = products.reduce((sum, product) => sum + product.stock, 0);
       const lowStock = products.filter(p => p.stock <= 2).length;
-      const capital = products.reduce((sum, p) => sum + (p.price * p.stock), 0);
       
       setTotalProducts(products.length);
       setTotalStock(total);
       setLowStockProducts(lowStock);
-      setTotalCapital(capital.toLocaleString('es-CL', { style: 'currency', currency: 'CLP' }));
     } catch (error) {
       console.error("Error fetching stats:", error);
     } finally {
@@ -89,6 +89,28 @@ const DashboardStats = () => {
       
       {/* Card de ventas mensuales */}
       <MonthlySalesCard />
+      
+      {/* Botón para acceder al registro de ventas */}
+      <div className="card text-white mb-3 bg-dark shadow-sm cursor-pointer card-hover"
+           onClick={() => router.push('/sales-registry')}
+           style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
+           onMouseEnter={(e) => {
+             e.currentTarget.style.transform = 'scale(1.02)';
+           }}
+           onMouseLeave={(e) => {
+             e.currentTarget.style.transform = 'scale(1)';
+           }}>
+        <div className="card-body d-flex align-items-center">
+          <FileText size={30} />
+          <div className='ms-3'>
+            <h5 className="card-title mb-1">📊 Registro de Ventas</h5>
+            <p className="card-text mb-0 small">
+              Ver todas las ventas registradas 👆
+            </p>
+          </div>
+        </div>
+      </div>
+      
       <StatCard 
         title="Total Productos" 
         value={totalProducts} 
@@ -101,12 +123,10 @@ const DashboardStats = () => {
         icon={<Archive size={30} />} 
         color="success" 
       />
-      <StatCard 
-        title="Capital en Stock" 
-        value={totalCapital} 
-        icon={<DollarSign size={30} />} 
-        color="info" 
-      />
+      
+      {/* Productos más vendidos */}
+      <TopSellingProductsCard />
+      
       <StatCard 
         title="Bajo Stock (≤2)" 
         value={lowStockProducts} 

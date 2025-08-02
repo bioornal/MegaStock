@@ -28,6 +28,7 @@ export interface CashSession {
 export interface Sale {
   id: number;
   cash_session_id: number;
+  customer_id?: number | null;
   product_id: number;
   quantity: number;
   unit_price: number;
@@ -39,6 +40,34 @@ export interface Sale {
     brand: string;
     color?: string;
   };
+  cash_session?: {
+    vendor: {
+      name: string;
+    };
+    date: string;
+  };
+  customer?: {
+    name: string;
+    business_name?: string;
+  };
+}
+
+export interface SalesResponse {
+  sales: Sale[];
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+}
+
+export interface TopSellingProduct {
+  product_id: number;
+  product_name: string;
+  product_brand: string;
+  product_color?: string;
+  total_quantity_sold: number;
+  total_revenue: number;
+  sales_count: number;
+  percentage_of_total_sales: number;
 }
 
 // Obtener todos los vendedores activos
@@ -385,4 +414,194 @@ export const resetMonthlySales = async (): Promise<{ deletedCount: number }> => 
   return {
     deletedCount: data?.length || 0
   };
+};
+
+// Obtener todas las ventas con paginación
+export const getAllSales = async (page: number = 1, pageSize: number = 20): Promise<SalesResponse> => {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  // Obtener el total de ventas
+  const { count } = await supabase
+    .from('sales')
+    .select('*', { count: 'exact', head: true });
+
+  // Obtener las ventas con paginación
+  const { data, error } = await supabase
+    .from('sales')
+    .select(`
+      *,
+      product:products(name, brand, color),
+      cash_session:cash_sessions(
+        vendor:vendors(name),
+        date
+      ),
+      customer:customers(name, business_name)
+    `)
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (error) {
+    console.error('Error fetching all sales:', error);
+    throw error;
+  }
+
+  const totalCount = count || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  return {
+    sales: data || [],
+    totalCount,
+    totalPages,
+    currentPage: page
+  };
+};
+
+// Buscar ventas por filtros con paginación
+export const searchSales = async (
+  page: number = 1,
+  pageSize: number = 20,
+  filters: {
+    vendorName?: string;
+    customerName?: string;
+    productName?: string;
+    paymentMethod?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  } = {}
+): Promise<SalesResponse> => {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
+    .from('sales')
+    .select(`
+      *,
+      product:products(name, brand, color),
+      cash_session:cash_sessions(
+        vendor:vendors(name),
+        date
+      ),
+      customer:customers(name, business_name)
+    `, { count: 'exact' });
+
+  // Aplicar filtros
+  if (filters.paymentMethod) {
+    query = query.eq('payment_method', filters.paymentMethod);
+  }
+
+  if (filters.dateFrom) {
+    query = query.gte('created_at', filters.dateFrom);
+  }
+
+  if (filters.dateTo) {
+    query = query.lte('created_at', filters.dateTo + 'T23:59:59');
+  }
+
+  const { data, error, count } = await query
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (error) {
+    console.error('Error searching sales:', error);
+    throw error;
+  }
+
+  // Filtrar por nombre de vendedor, cliente o producto en el frontend
+  // ya que Supabase no permite filtros complejos en relaciones
+  let filteredData = data || [];
+
+  if (filters.vendorName) {
+    filteredData = filteredData.filter(sale => 
+      sale.cash_session?.vendor?.name?.toLowerCase().includes(filters.vendorName!.toLowerCase())
+    );
+  }
+
+  if (filters.customerName) {
+    filteredData = filteredData.filter(sale => 
+      sale.customer?.name?.toLowerCase().includes(filters.customerName!.toLowerCase()) ||
+      sale.customer?.business_name?.toLowerCase().includes(filters.customerName!.toLowerCase())
+    );
+  }
+
+  if (filters.productName) {
+    filteredData = filteredData.filter(sale => 
+      sale.product?.name?.toLowerCase().includes(filters.productName!.toLowerCase()) ||
+      sale.product?.brand?.toLowerCase().includes(filters.productName!.toLowerCase())
+    );
+  }
+
+  const totalCount = count || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  return {
+    sales: filteredData,
+    totalCount,
+    totalPages,
+    currentPage: page
+  };
+};
+
+// Obtener productos más vendidos
+export const getTopSellingProducts = async (limit: number = 5): Promise<TopSellingProduct[]> => {
+  // Obtener todas las ventas con información del producto
+  const { data: salesData, error } = await supabase
+    .from('sales')
+    .select(`
+      product_id,
+      quantity,
+      total_amount,
+      product:products(name, brand, color)
+    `);
+
+  if (error) {
+    console.error('Error fetching sales for top products:', error);
+    throw error;
+  }
+
+  if (!salesData || salesData.length === 0) {
+    return [];
+  }
+
+  // Calcular totales generales
+  const totalQuantitySold = salesData.reduce((sum, sale) => sum + sale.quantity, 0);
+  const totalRevenue = salesData.reduce((sum, sale) => sum + sale.total_amount, 0);
+
+  // Agrupar por producto
+  const productStats = salesData.reduce((acc, sale) => {
+    const productId = sale.product_id;
+    
+    if (!acc[productId]) {
+      const product = Array.isArray(sale.product) ? sale.product[0] : sale.product;
+      acc[productId] = {
+        product_id: productId,
+        product_name: product?.name || 'Producto desconocido',
+        product_brand: product?.brand || 'Marca desconocida',
+        product_color: product?.color,
+        total_quantity_sold: 0,
+        total_revenue: 0,
+        sales_count: 0,
+        percentage_of_total_sales: 0
+      };
+    }
+    
+    acc[productId].total_quantity_sold += sale.quantity;
+    acc[productId].total_revenue += sale.total_amount;
+    acc[productId].sales_count += 1;
+    
+    return acc;
+  }, {} as Record<number, TopSellingProduct>);
+
+  // Convertir a array y calcular porcentajes
+  const productsArray = Object.values(productStats).map(product => ({
+    ...product,
+    percentage_of_total_sales: totalQuantitySold > 0 
+      ? (product.total_quantity_sold / totalQuantitySold) * 100 
+      : 0
+  }));
+
+  // Ordenar por cantidad vendida (descendente) y tomar los primeros N
+  return productsArray
+    .sort((a, b) => b.total_quantity_sold - a.total_quantity_sold)
+    .slice(0, limit);
 };
