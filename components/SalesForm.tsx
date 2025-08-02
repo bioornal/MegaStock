@@ -247,17 +247,7 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
         }
       }
 
-      // Generar ticket si hay ventas registradas
-      if (saleIds.length > 0) {
-        try {
-          const ticketInfo = await getTicketData(saleIds);
-          setTicketData(ticketInfo);
-          setShowTicket(true);
-        } catch (ticketError) {
-          console.warn('Error generando ticket:', ticketError);
-          // Continuar sin mostrar error, la venta ya se registró
-        }
-      }
+      // Ya no generamos ticket automáticamente, se hará desde ventas recientes
 
       // Limpiar draft después de guardar exitosamente
       salesPersistence.clearDraft(cashSession.vendor_id, cashSession.id);
@@ -314,9 +304,38 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
     setShowCustomerForm(false);
   };
 
+  // Funciones para manejar el ticket
+  const handleShowTicket = () => {
+    setShowTicket(true);
+  };
+
+  const handleCloseTicket = () => {
+    setShowTicket(false);
+  };
+
   const handleTicketPrinted = () => {
     setShowTicket(false);
     setTicketData(null);
+  };
+
+  const handleTicketClosed = () => {
+    setShowTicket(false);
+    setTicketData(null);
+  };
+
+  // Función para mostrar ticket de una venta específica
+  const handleShowSaleTicket = async (saleId: number) => {
+    try {
+      setIsLoading(true);
+      const ticketInfo = await getTicketData([saleId]);
+      setTicketData(ticketInfo);
+      setShowTicket(true);
+    } catch (error) {
+      console.error('Error generando ticket:', error);
+      setError('Error al generar el ticket');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -629,6 +648,8 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
                 </button>
               </div>
             )}
+
+
           </form>
 
           {/* Ventas recientes */}
@@ -643,6 +664,7 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
                       <th>Cantidad</th>
                       <th>Método</th>
                       <th>Total</th>
+                      <th>Ticket</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -660,6 +682,17 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
                         </td>
                         <td>
                           <small className="fw-bold">${sale.total_amount.toLocaleString('es-CL')}</small>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-outline-primary btn-sm"
+                            onClick={() => handleShowSaleTicket(sale.id)}
+                            disabled={isLoading}
+                            title="Ver e imprimir ticket"
+                          >
+                            <FileText size={14} />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -683,7 +716,7 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
       {showTicket && ticketData && (
         <TicketPrint
           ticketData={ticketData}
-          onClose={() => setShowTicket(false)}
+          onClose={handleTicketClosed}
           onPrint={handleTicketPrinted}
         />
       )}

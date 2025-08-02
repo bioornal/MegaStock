@@ -196,26 +196,32 @@ export const getTicketData = async (saleIds: number[]): Promise<TicketData> => {
 
   // Agrupar y procesar items por producto
   const saleItems = salesData.map(sale => {
-    const unitPriceWithoutIVA = sale.unit_price / 1.21;
-    const subtotalWithoutIVA = sale.total_amount / 1.21;
+    // CÁLCULO CORRECTO: El total_amount es lo que paga el cliente (precio final con IVA incluido)
+    const totalFinal = sale.total_amount; // Precio final que paga el cliente
+    const subtotalNeto = totalFinal / 1.21; // Base imponible (precio sin IVA)
+    const ivaItem = totalFinal - subtotalNeto; // IVA discriminado
+    
+    const unitPriceFinal = sale.unit_price; // Precio unitario final que paga el cliente
+    const unitPriceNeto = unitPriceFinal / 1.21; // Precio unitario sin IVA
+    
     return {
       product_name: sale.product?.name || 'Producto no disponible',
       brand: sale.product?.brand || '',
       quantity: sale.quantity,
-      unit_price: sale.unit_price, // Precio final con IVA
-      total_amount: sale.total_amount, // Total final con IVA
-      unit_price_without_iva: unitPriceWithoutIVA,
-      subtotal_without_iva: subtotalWithoutIVA
+      unit_price: unitPriceFinal, // Precio unitario final con IVA (lo que paga)
+      total_amount: totalFinal, // Total final con IVA (lo que paga)
+      unit_price_without_iva: unitPriceNeto, // Precio unitario neto
+      subtotal_without_iva: subtotalNeto // Subtotal neto
     };
   });
 
-  // CORRECCIÓN: Los precios en la BD tienen IVA aplicado incorrectamente
-  // Si el producto cuesta $1 final, en la BD está como $1.21 (1 * 1.21)
-  // Necesitamos corregir: el total real debe ser $1, no $1.21
-  const totalIncorrecto = salesData.reduce((sum, sale) => sum + sale.total_amount, 0);
-  const total = totalIncorrecto / 1.21; // Este es el precio final correcto que debe pagar el cliente
-  const subtotal = total / 1.21; // Base imponible (precio sin IVA)
-  const iva_amount = total - subtotal; // IVA = Total - Base imponible
+  // CÁLCULO CORRECTO DEL TICKET:
+  // Total = suma de todos los total_amount (precio final que paga el cliente)
+  const total = salesData.reduce((sum, sale) => sum + sale.total_amount, 0);
+  // Subtotal = total / 1.21 (base imponible, precio neto sin IVA)
+  const subtotal = total / 1.21;
+  // IVA = total - subtotal (IVA discriminado)
+  const iva_amount = total - subtotal;
 
   // Usar el primer registro para obtener datos comunes
   const firstSale = salesData[0];

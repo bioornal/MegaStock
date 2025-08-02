@@ -214,15 +214,13 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
                             {ticketData.customer.name}
                           </p>
                           <p className="mb-1" style={{ fontWeight: 'normal' }}>
-                            Dir.: {ticketData.customer.address || ''}
-                            {ticketData.customer.city && `, ${ticketData.customer.city}`}
-                            {ticketData.customer.province && `, ${ticketData.customer.province}`}
+                            Dir.: {ticketData.customer.address || 'Sin dirección'}
                           </p>
                           <p className="mb-1" style={{ fontWeight: 'normal' }}>
-                            Loc.: {ticketData.customer.city || 'la cumbre'}
+                            Loc.: {ticketData.customer.city || 'Sin localidad'}
                           </p>
                           <p className="mb-1" style={{ fontWeight: 'normal' }}>
-                            Prov.: {ticketData.customer.province || ''}
+                            Prov.: {ticketData.customer.province || 'Sin provincia'}
                           </p>
                           <p className="mb-1" style={{ fontWeight: 'normal' }}>
                             CUIT: {ticketData.customer.cuit_dni || ''}

@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { getAllSales, searchSales, SalesResponse, Sale } from '@/services/vendorService';
+import { getTicketData } from '@/services/customerService';
 import { useDebounce } from '@/lib/hooks';
+import TicketPrint from '@/components/TicketPrint';
+import { FileText } from 'lucide-react';
 
 const PAYMENT_METHOD_LABELS = {
   cash: 'Efectivo',
@@ -27,6 +30,11 @@ export default function SalesRegistryPage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Estados para tickets
+  const [showTicket, setShowTicket] = useState(false);
+  const [ticketData, setTicketData] = useState<any>(null);
+  const [ticketLoading, setTicketLoading] = useState(false);
   
   // Filtros
   const [filters, setFilters] = useState({
@@ -83,6 +91,31 @@ export default function SalesRegistryPage() {
     });
   };
 
+  // Funciones para manejar tickets
+  const handleShowSaleTicket = async (saleId: number) => {
+    try {
+      setTicketLoading(true);
+      const ticketInfo = await getTicketData([saleId]);
+      setTicketData(ticketInfo);
+      setShowTicket(true);
+    } catch (error) {
+      console.error('Error generando ticket:', error);
+      setError('Error al generar el ticket');
+    } finally {
+      setTicketLoading(false);
+    }
+  };
+
+  const handleTicketPrinted = () => {
+    setShowTicket(false);
+    setTicketData(null);
+  };
+
+  const handleTicketClosed = () => {
+    setShowTicket(false);
+    setTicketData(null);
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CL', {
       style: 'currency',
@@ -102,6 +135,7 @@ export default function SalesRegistryPage() {
   };
 
   return (
+    <>
     <div className="container-fluid py-4">
       <div className="row">
         <div className="col-12">
@@ -243,6 +277,7 @@ export default function SalesRegistryPage() {
                           <th>Precio Unit.</th>
                           <th>Total</th>
                           <th>Método Pago</th>
+                          <th>Ticket</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -294,6 +329,23 @@ export default function SalesRegistryPage() {
                               <span className={`badge bg-${PAYMENT_METHOD_COLORS[sale.payment_method]}`}>
                                 {PAYMENT_METHOD_LABELS[sale.payment_method]}
                               </span>
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="btn btn-outline-primary btn-sm"
+                                onClick={() => handleShowSaleTicket(sale.id)}
+                                disabled={ticketLoading}
+                                title="Ver e imprimir ticket"
+                              >
+                                {ticketLoading ? (
+                                  <div className="spinner-border spinner-border-sm" role="status">
+                                    <span className="visually-hidden">Cargando...</span>
+                                  </div>
+                                ) : (
+                                  <FileText size={14} />
+                                )}
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -367,5 +419,15 @@ export default function SalesRegistryPage() {
         </div>
       </div>
     </div>
+
+    {/* Modal de ticket */}
+    {showTicket && ticketData && (
+      <TicketPrint
+        ticketData={ticketData}
+        onClose={handleTicketClosed}
+        onPrint={handleTicketPrinted}
+      />
+    )}
+    </>
   );
 }

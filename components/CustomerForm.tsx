@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Customer, createCustomer, findCustomerByCuitDni, getDefaultCustomer, searchCustomers } from '@/services/customerService';
+import { Customer, createCustomer, updateCustomer, findCustomerByCuitDni, getDefaultCustomer, searchCustomers } from '@/services/customerService';
 import { User, Search, Plus, FileText } from 'lucide-react';
 
 interface CustomerFormProps {
@@ -101,17 +101,32 @@ const CustomerForm = ({ onCustomerSelected, onClose, isRequired = false }: Custo
     try {
       const customerData = {
         name: customer.name.trim(),
+        business_name: customer.business_name?.trim() || '',
         address: customer.address?.trim() || '',
+        city: customer.city?.trim() || '',
+        province: customer.province?.trim() || '',
         cuit_dni: customer.cuit_dni?.trim() || '',
         email: customer.email?.trim() || '',
         phone: customer.phone?.trim() || '',
         customer_type: customer.customer_type || 'consumidor_final'
       };
 
-      const newCustomer = await createCustomer(customerData);
-      onCustomerSelected(newCustomer);
+      let resultCustomer: Customer;
+      
+      // Si el cliente tiene ID, es un cliente existente -> ACTUALIZAR
+      if (customer.id) {
+        console.log('Actualizando cliente existente ID:', customer.id);
+        resultCustomer = await updateCustomer(customer.id, customerData);
+      } else {
+        // Si no tiene ID, es un cliente nuevo -> CREAR
+        console.log('Creando nuevo cliente');
+        resultCustomer = await createCustomer(customerData);
+      }
+      
+      onCustomerSelected(resultCustomer);
       onClose();
     } catch (error: any) {
+      console.error('Error en handleSubmit:', error);
       setError(error.message || 'Error guardando cliente');
     } finally {
       setIsLoading(false);
