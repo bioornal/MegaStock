@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { CashSession, registerSale, getSalesBySession, Sale } from '@/services/vendorService';
 import { getProducts, Product } from '@/services/productService';
 import { Customer, getTicketData } from '@/services/customerService';
-import { ShoppingCart, Plus, Trash2, CreditCard, Smartphone, DollarSign, Search, Save, AlertCircle, User, FileText } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, CreditCard, Smartphone, DollarSign, Search, Save, AlertCircle, User, FileText, Minus, X, Package, Users, Receipt } from 'lucide-react';
 import { useDebounce } from '@/lib/hooks';
 import { salesPersistence } from '@/lib/salesPersistence';
 import CustomerForm from './CustomerForm';

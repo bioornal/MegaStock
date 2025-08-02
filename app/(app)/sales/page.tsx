@@ -58,46 +58,11 @@ const SalesPage = () => {
   }
 
   return (
-    <div className="container-fluid py-4">
-      <div className="row">
-        <div className="col-12">
-          <div className="card shadow-sm mb-4">
-            <div className="card-header bg-primary text-white">
-              <h3 className="mb-0 d-flex align-items-center">
-                <ShoppingCart size={24} className="me-2" />
-                Sistema de Ventas - Gestión de Caja
-              </h3>
-            </div>
-            <div className="card-body">
-              {/* Selector de vendedor */}
-              <div className="row mb-4">
-                <div className="col-md-4">
-                  <label className="form-label fw-bold">Seleccionar Vendedor:</label>
-                  <select 
-                    className="form-select"
-                    value={selectedVendor?.id || ''}
-                    onChange={(e) => {
-                      const vendor = vendors.find(v => v.id === parseInt(e.target.value));
-                      setSelectedVendor(vendor || null);
-                    }}
-                  >
-                    {vendors.map(vendor => (
-                      <option key={vendor.id} value={vendor.id}>
-                        {vendor.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Dashboard del vendedor seleccionado */}
-              {selectedVendor && (
-                <VendorDashboard vendor={selectedVendor} />
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="container-fluid py-2">
+      {/* Dashboard del vendedor (siempre el primero disponible) */}
+      {selectedVendor && (
+        <VendorDashboard vendor={selectedVendor} />
+      )}
     </div>
   );
 };

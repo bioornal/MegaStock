@@ -173,6 +173,29 @@ export class SalesPersistence {
 
     return `${draft.length} productos (${totalItems} unidades) por $${totalValue.toLocaleString('es-CL')}`;
   }
+
+  // Recuperar draft y convertir a SaleItems
+  async recoverDraft(vendorId: number, cashSessionId: number, products: any[]): Promise<any[]> {
+    const draft = this.loadDraft(vendorId, cashSessionId);
+    if (draft.length === 0) return [];
+
+    const recoveredItems = [];
+    
+    for (const draftItem of draft) {
+      const product = products.find(p => p.id === draftItem.productId);
+      if (product && product.stock >= draftItem.quantity) {
+        recoveredItems.push({
+          product,
+          quantity: draftItem.quantity,
+          unitPrice: draftItem.unitPrice,
+          paymentMethod: draftItem.paymentMethod,
+          applyPromotion: false
+        });
+      }
+    }
+
+    return recoveredItems;
+  }
 }
 
 // Instancia singleton

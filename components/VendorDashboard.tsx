@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Vendor, CashSession, getActiveCashSession, openCashSession, closeCashSession } from '@/services/vendorService';
 import CashOpeningForm from './CashOpeningForm';
-import SalesForm from './SalesForm';
+import ImprovedSalesForm from './ImprovedSalesForm';
 import CashClosingForm from './CashClosingForm';
 import { DollarSign, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -57,44 +57,6 @@ const VendorDashboard = ({ vendor }: VendorDashboardProps) => {
 
   return (
     <div>
-      {/* Header del vendedor */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <div className="card bg-light">
-            <div className="card-body">
-              <div className="row align-items-center">
-                <div className="col-md-6">
-                  <h4 className="mb-1">👤 {vendor.name}</h4>
-                  <p className="text-muted mb-0">
-                    {new Date().toLocaleDateString('es-CL', { 
-                      weekday: 'long', 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
-                    })}
-                  </p>
-                </div>
-                <div className="col-md-6 text-md-end">
-                  <div className="d-flex align-items-center justify-content-md-end">
-                    {cashSession ? (
-                      <div className="d-flex align-items-center text-success">
-                        <CheckCircle size={20} className="me-2" />
-                        <span className="fw-bold">Caja Abierta</span>
-                      </div>
-                    ) : (
-                      <div className="d-flex align-items-center text-warning">
-                        <AlertCircle size={20} className="me-2" />
-                        <span className="fw-bold">Caja Cerrada</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Contenido principal según estado de la caja */}
       {!cashSession ? (
         // Formulario de apertura de caja
@@ -103,88 +65,61 @@ const VendorDashboard = ({ vendor }: VendorDashboardProps) => {
           onCashOpened={handleCashOpened}
         />
       ) : (
-        <div className="row">
-          {/* Información de la sesión actual */}
-          <div className="col-md-4 mb-4">
-            <div className="card h-100">
-              <div className="card-header bg-success text-white">
-                <h6 className="mb-0 d-flex align-items-center">
-                  <DollarSign size={18} className="me-2" />
-                  Resumen de Caja
-                </h6>
-              </div>
-              <div className="card-body">
-                <div className="mb-3">
-                  <small className="text-muted">Apertura:</small>
-                  <div className="fw-bold text-success">
-                    ${cashSession.opening_cash.toLocaleString('es-CL')}
-                  </div>
-                </div>
-                
-                <div className="mb-3">
-                  <small className="text-muted">Total Ventas:</small>
-                  <div className="fw-bold">
-                    ${cashSession.total_sales.toLocaleString('es-CL')}
-                  </div>
-                </div>
-
-                <div className="row mb-3">
-                  <div className="col-6">
-                    <small className="text-muted">💵 Efectivo:</small>
-                    <div className="fw-bold text-success">
-                      ${cashSession.cash_sales.toLocaleString('es-CL')}
+        <>
+          {/* Resumen de Caja Súper Compacto */}
+          <div className="row mb-2">
+            <div className="col-12">
+              <div className="card border-0 shadow-sm">
+                <div className="card-body p-2">
+                  <div className="row g-2 align-items-center text-center">
+                    <div className="col-md-2">
+                      <small className="text-muted d-block">Apertura</small>
+                      <strong className="text-success">${cashSession.opening_cash.toLocaleString('es-CL')}</strong>
+                    </div>
+                    <div className="col-md-2">
+                      <small className="text-muted d-block">Total Ventas</small>
+                      <strong className="text-primary">${cashSession.total_sales.toLocaleString('es-CL')}</strong>
+                    </div>
+                    <div className="col-md-2">
+                      <small className="text-muted d-block">💵 Efectivo</small>
+                      <strong className="text-success">${cashSession.cash_sales.toLocaleString('es-CL')}</strong>
+                    </div>
+                    <div className="col-md-2">
+                      <small className="text-muted d-block">💳 Tarjeta</small>
+                      <strong className="text-info">${cashSession.card_sales.toLocaleString('es-CL')}</strong>
+                    </div>
+                    <div className="col-md-2">
+                      <small className="text-muted d-block">📱 Digital</small>
+                      <strong className="text-primary">${cashSession.digital_sales.toLocaleString('es-CL')}</strong>
+                    </div>
+                    <div className="col-md-2">
+                      <small className="text-muted d-block">💰 A Rendir</small>
+                      <strong className="text-warning">${cashSession.cash_to_render.toLocaleString('es-CL')}</strong>
                     </div>
                   </div>
-                  <div className="col-6">
-                    <small className="text-muted">💳 Tarjeta:</small>
-                    <div className="fw-bold text-info">
-                      ${cashSession.card_sales.toLocaleString('es-CL')}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <small className="text-muted">📱 Digital (QR/Transfer):</small>
-                  <div className="fw-bold text-primary">
-                    ${cashSession.digital_sales.toLocaleString('es-CL')}
-                  </div>
-                </div>
-
-                <hr />
-                
-                <div className="mb-3">
-                  <small className="text-muted">💰 Dinero a Rendir:</small>
-                  <div className="fw-bold text-warning fs-5">
-                    ${cashSession.cash_to_render.toLocaleString('es-CL')}
-                  </div>
-                </div>
-
-                <div className="d-flex align-items-center text-muted">
-                  <Clock size={16} className="me-2" />
-                  <small>
-                    Abierta: {new Date(cashSession.opened_at).toLocaleTimeString('es-CL')}
-                  </small>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Formulario de ventas */}
-          <div className="col-md-8 mb-4">
-            <SalesForm 
-              cashSession={cashSession}
-              onSaleRegistered={handleSaleRegistered}
-            />
-          </div>
+          <div className="row">
+            {/* Panel de Ventas - Ahora ocupa todo el ancho */}
+            <div className="col-12 mb-4">
+              <ImprovedSalesForm 
+                cashSession={cashSession}
+                onSaleRegistered={handleSaleRegistered}
+              />
+            </div>
 
-          {/* Formulario de cierre de caja */}
-          <div className="col-12">
-            <CashClosingForm 
-              cashSession={cashSession}
-              onCashClosed={handleCashClosed}
-            />
+            {/* Formulario de cierre de caja */}
+            <div className="col-12">
+              <CashClosingForm 
+                cashSession={cashSession}
+                onCashClosed={handleCashClosed}
+              />
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
