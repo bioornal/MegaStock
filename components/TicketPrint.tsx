@@ -219,9 +219,7 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
                           <p className="mb-1" style={{ fontWeight: 'normal' }}>
                             Loc.: {ticketData.customer.city || 'Sin localidad'}
                           </p>
-                          <p className="mb-1" style={{ fontWeight: 'normal' }}>
-                            Prov.: {ticketData.customer.province || 'Sin provincia'}
-                          </p>
+
                           <p className="mb-1" style={{ fontWeight: 'normal' }}>
                             CUIT: {ticketData.customer.cuit_dni || ''}
                           </p>
@@ -241,7 +239,7 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
                           <p className="mb-1" style={{ fontWeight: 'normal' }}></p>
                           <p className="mb-1" style={{ fontWeight: 'normal' }}>Dir.: </p>
                           <p className="mb-1" style={{ fontWeight: 'normal' }}>Loc.: </p>
-                          <p className="mb-1" style={{ fontWeight: 'normal' }}>Prov.: </p>
+
                           <p className="mb-1" style={{ fontWeight: 'normal' }}>CUIT: </p>
                           <p className="mb-1" style={{ fontWeight: 'normal' }}>IVA Responsable Inscripto</p>
                         </>
