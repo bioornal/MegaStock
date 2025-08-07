@@ -1,38 +1,73 @@
 "use client";
 
-import { useState } from 'react';
-import ProductTable from "@/components/ProductTable";
-import AddProductForm from '@/components/AddProductForm';
+import { useAuth } from '@/lib/hooks/useAuth';
+import DashboardStats from '@/components/DashboardStats';
+import ProductTable from '@/components/ProductTable';
+import ViewerDashboard from '@/components/ViewerDashboard';
+import { AlertTriangle } from 'lucide-react';
 
-export default function ProductsPage() {
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0); // Estado para forzar la recarga de la tabla
+export default function HomePage() {
+  const { user, loading, isAdmin, error } = useAuth();
 
-  const handleProductAdded = () => {
-    setShowAddForm(false); // Oculta el formulario
-    setRefreshKey(oldKey => oldKey + 1); // Cambia la key para que ProductTable se recargue
-  };
-
-  return (
-    <>
-      {showAddForm && (
-        <AddProductForm 
-          onProductAdded={handleProductAdded} 
-          onCancel={() => setShowAddForm(false)}
-        />
-      )}
-
-      <div className="card shadow-sm">
-        <div className="card-header bg-white d-flex justify-content-between align-items-center">
-          <h3 className="mb-0">Gestión de Productos</h3>
-          <button onClick={() => setShowAddForm(!showAddForm)} className="btn btn-primary">
-            {showAddForm ? 'Cancelar' : 'Añadir Producto'}
-          </button>
-        </div>
-        <div className="card-body">
-          <ProductTable key={refreshKey} />
+  if (loading) {
+    return (
+      <div className="container mt-5">
+        <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '300px' }}>
+          <div className="text-center">
+            <div className="spinner-border text-primary mb-3" role="status">
+              <span className="visually-hidden">Cargando...</span>
+            </div>
+            <p className="text-muted">Verificando permisos...</p>
+          </div>
         </div>
       </div>
-    </>
-  );
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mt-5">
+        <div className="alert alert-danger d-flex align-items-center" role="alert">
+          <AlertTriangle className="me-2" size={20} />
+          <div>
+            <h5 className="alert-heading">Error de Autenticación</h5>
+            <p className="mb-0">{error}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="container mt-5">
+        <div className="alert alert-warning d-flex align-items-center" role="alert">
+          <AlertTriangle className="me-2" size={20} />
+          <div>
+            <h5 className="alert-heading">Acceso Denegado</h5>
+            <p className="mb-0">Debes iniciar sesión para acceder al sistema.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Dashboard para administradores
+  if (isAdmin) {
+    return (
+      <div className="row mt-4">
+        <aside className="col-md-3 col-lg-2 bg-light p-4 border-end min-vh-100 d-none d-md-block">
+          <DashboardStats />
+        </aside>
+        <main className="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+          <div className="pt-3">
+            <ProductTable />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Dashboard para usuarios viewer (solo consulta de stock)
+  return <ViewerDashboard />;
 }
