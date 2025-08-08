@@ -228,7 +228,10 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
     try {
       const saleIds: number[] = [];
       
-      // Registrar cada item como una venta separada
+      // Generar un único ticket_number para toda la venta
+      const ticketNumber = `${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Date.now().toString().slice(-6)}`;
+      
+      // Registrar cada item con el mismo ticket_number
       for (const item of salesItems) {
         const saleResult = await registerSale({
           cash_session_id: cashSession.id,
@@ -239,7 +242,9 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
           total_amount: item.applyPromotion && item.quantity >= 2
             ? item.unitPrice * (item.quantity - 1)
             : item.unitPrice * item.quantity,
-          payment_method: item.paymentMethod
+          payment_method: item.paymentMethod,
+          ticket_number: ticketNumber,
+          needs_ticket: true
         });
         
         if (saleResult?.id) {
@@ -247,7 +252,17 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
         }
       }
 
-      // Ya no generamos ticket automáticamente, se hará desde ventas recientes
+      // Generar y mostrar el ticket automáticamente después de la venta
+      if (saleIds.length > 0) {
+        try {
+          const ticketInfo = await getTicketData(saleIds);
+          setTicketData(ticketInfo);
+          setShowTicket(true);
+        } catch (ticketError) {
+          console.error('Error generando ticket:', ticketError);
+          // No bloquear la venta si hay error generando el ticket
+        }
+      }
 
       // Limpiar draft después de guardar exitosamente
       salesPersistence.clearDraft(cashSession.vendor_id, cashSession.id);
@@ -321,6 +336,51 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
   const handleTicketClosed = () => {
     setShowTicket(false);
     setTicketData(null);
+  };
+
+  // Función para vista previa del ticket antes de confirmar la venta
+  const handlePreviewTicket = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Generar un ticket temporal para vista previa
+      const tempTicketNumber = `PREV-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${Date.now().toString().slice(-6)}`;
+      
+      // Crear datos temporales de venta para vista previa
+      const tempSales = salesItems.map((item, index) => ({
+        id: -index - 1, // IDs temporales negativos
+        product: {
+          name: item.product.name,
+          brand: item.product.brand,
+          color: item.product.color
+        },
+        quantity: item.quantity,
+        unit_price: item.unitPrice,
+        total_amount: item.applyPromotion && item.quantity >= 2
+          ? item.unitPrice * (item.quantity - 1)
+          : item.unitPrice * item.quantity,
+        payment_method: item.paymentMethod,
+        ticket_number: tempTicketNumber,
+        customer: selectedCustomer || { name: 'Consumidor Final' }
+      }));
+      
+      const ticketInfo = {
+        ticket_number: tempTicketNumber,
+        customer: selectedCustomer || { name: 'Consumidor Final' },
+        sales: tempSales,
+        total: calculateTotal(),
+        date: new Date().toISOString(),
+        isPreview: true // Indicador para mostrar que es vista previa
+      };
+      
+      setTicketData(ticketInfo);
+      setShowTicket(true);
+    } catch (error) {
+      console.error('Error generando vista previa:', error);
+      setError('Error al generar vista previa del ticket');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Función para mostrar ticket de una venta específica
@@ -629,23 +689,34 @@ const SalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
                 <div>
                   <h5 className="mb-0">Total: ${calculateTotal().toLocaleString('es-CL')}</h5>
                 </div>
-                <button
-                  type="submit"
-                  className="btn btn-success btn-lg"
-                  disabled={isLoading || salesItems.length === 0}
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="spinner-border spinner-border-sm me-2" role="status"></div>
-                      Registrando...
-                    </>
-                  ) : (
-                    <>
-                      <ShoppingCart size={16} className="me-1" />
-                      Registrar Venta
-                    </>
-                  )}
-                </button>
+                <div className="d-flex gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-lg"
+                    onClick={handlePreviewTicket}
+                    disabled={isLoading || salesItems.length === 0}
+                  >
+                    <FileText size={16} className="me-1" />
+                    Vista Previa
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-success btn-lg"
+                    disabled={isLoading || salesItems.length === 0}
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="spinner-border spinner-border-sm me-2" role="status"></div>
+                        Registrando...
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart size={16} className="me-1" />
+                        Registrar Venta
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
 

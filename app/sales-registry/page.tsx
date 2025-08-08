@@ -91,11 +91,54 @@ export default function SalesRegistryPage() {
     });
   };
 
+  // Función para agrupar ventas por ticket_number
+  const groupSalesByTicket = (sales: Sale[]) => {
+    const grouped = new Map<string, {
+      ticket_number: string;
+      sales: Sale[];
+      total_amount: number;
+      created_at: string;
+      vendor_name: string;
+      customer: any;
+      payment_methods: string[];
+    }>();
+
+    sales.forEach(sale => {
+      const ticketKey = sale.ticket_number || `individual-${sale.id}`;
+      
+      if (!grouped.has(ticketKey)) {
+        grouped.set(ticketKey, {
+          ticket_number: ticketKey,
+          sales: [],
+          total_amount: 0,
+          created_at: sale.created_at,
+          vendor_name: sale.cash_session?.vendor?.name || 'N/A',
+          customer: sale.customer,
+          payment_methods: []
+        });
+      }
+
+      const group = grouped.get(ticketKey)!;
+      group.sales.push(sale);
+      group.total_amount += sale.total_amount;
+      
+      // Agregar método de pago si no está ya incluido
+      if (!group.payment_methods.includes(sale.payment_method)) {
+        group.payment_methods.push(sale.payment_method);
+      }
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  };
+
   // Funciones para manejar tickets
-  const handleShowSaleTicket = async (saleId: number) => {
+  const handleShowGroupTicket = async (groupedSale: any) => {
     try {
       setTicketLoading(true);
-      const ticketInfo = await getTicketData([saleId]);
+      const saleIds = groupedSale.sales.map((sale: Sale) => sale.id);
+      const ticketInfo = await getTicketData(saleIds);
       setTicketData(ticketInfo);
       setShowTicket(true);
     } catch (error) {
@@ -268,38 +311,48 @@ export default function SalesRegistryPage() {
                     <table className="table table-striped table-hover">
                       <thead className="table-dark">
                         <tr>
-                          <th>ID</th>
+                          <th>Ticket</th>
                           <th>Fecha</th>
                           <th>Vendedor</th>
                           <th>Cliente</th>
-                          <th>Producto</th>
-                          <th>Cantidad</th>
-                          <th>Precio Unit.</th>
+                          <th>Productos</th>
+                          <th>Items</th>
                           <th>Total</th>
-                          <th>Método Pago</th>
-                          <th>Ticket</th>
+                          <th>Métodos Pago</th>
+                          <th>Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {salesData.sales.map((sale: Sale) => (
-                          <tr key={sale.id}>
+                        {groupSalesByTicket(salesData.sales).map((groupedSale, index) => (
+                          <tr key={groupedSale.ticket_number}>
                             <td>
-                              <small className="text-muted">#{sale.id}</small>
+                              <div>
+                                <small className="text-muted d-block">
+                                  {groupedSale.ticket_number.startsWith('individual-') 
+                                    ? `#${groupedSale.sales[0].id}` 
+                                    : groupedSale.ticket_number}
+                                </small>
+                                {groupedSale.sales.length > 1 && (
+                                  <span className="badge bg-success">
+                                    {groupedSale.sales.length} productos
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td>
-                              <small>{formatDate(sale.created_at)}</small>
+                              <small>{formatDate(groupedSale.created_at)}</small>
                             </td>
                             <td>
                               <span className="badge bg-secondary">
-                                {sale.cash_session?.vendor?.name || 'N/A'}
+                                {groupedSale.vendor_name}
                               </span>
                             </td>
                             <td>
-                              {sale.customer ? (
+                              {groupedSale.customer ? (
                                 <div>
-                                  <div className="fw-bold">{sale.customer.name}</div>
-                                  {sale.customer.business_name && (
-                                    <small className="text-muted">{sale.customer.business_name}</small>
+                                  <div className="fw-bold">{groupedSale.customer.name}</div>
+                                  {groupedSale.customer.business_name && (
+                                    <small className="text-muted">{groupedSale.customer.business_name}</small>
                                   )}
                                 </div>
                               ) : (
@@ -307,36 +360,46 @@ export default function SalesRegistryPage() {
                               )}
                             </td>
                             <td>
-                              <div>
-                                <div className="fw-bold">{sale.product?.name || 'N/A'}</div>
-                                <small className="text-muted">
-                                  {sale.product?.brand} {sale.product?.color && `- ${sale.product.color}`}
-                                </small>
+                              <div className="d-flex flex-column gap-1">
+                                {groupedSale.sales.map((sale, saleIndex) => (
+                                  <div key={sale.id} className="d-flex align-items-center gap-2">
+                                    <span className="badge bg-info">{sale.quantity}</span>
+                                    <div>
+                                      <div className="fw-bold small">{sale.product?.name || 'N/A'}</div>
+                                      <small className="text-muted">
+                                        {sale.product?.brand} {sale.product?.color && `- ${sale.product.color}`}
+                                      </small>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
                             </td>
                             <td>
-                              <span className="badge bg-info">{sale.quantity}</span>
-                            </td>
-                            <td>
-                              <small>{formatCurrency(sale.unit_price)}</small>
+                              <span className="badge bg-primary">
+                                {groupedSale.sales.reduce((total, sale) => total + sale.quantity, 0)} items
+                              </span>
                             </td>
                             <td>
                               <strong className="text-success">
-                                {formatCurrency(sale.total_amount)}
+                                {formatCurrency(groupedSale.total_amount)}
                               </strong>
                             </td>
                             <td>
-                              <span className={`badge bg-${PAYMENT_METHOD_COLORS[sale.payment_method]}`}>
-                                {PAYMENT_METHOD_LABELS[sale.payment_method]}
-                              </span>
+                              <div className="d-flex flex-wrap gap-1">
+                                {groupedSale.payment_methods.map((method, methodIndex) => (
+                                  <span key={methodIndex} className={`badge bg-${PAYMENT_METHOD_COLORS[method as keyof typeof PAYMENT_METHOD_COLORS]}`}>
+                                    {PAYMENT_METHOD_LABELS[method as keyof typeof PAYMENT_METHOD_LABELS]}
+                                  </span>
+                                ))}
+                              </div>
                             </td>
                             <td>
                               <button
                                 type="button"
                                 className="btn btn-outline-primary btn-sm"
-                                onClick={() => handleShowSaleTicket(sale.id)}
+                                onClick={() => handleShowGroupTicket(groupedSale)}
                                 disabled={ticketLoading}
-                                title="Ver e imprimir ticket"
+                                title="Ver e imprimir ticket completo"
                               >
                                 {ticketLoading ? (
                                   <div className="spinner-border spinner-border-sm" role="status">

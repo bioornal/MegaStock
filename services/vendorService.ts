@@ -34,6 +34,8 @@ export interface Sale {
   unit_price: number;
   total_amount: number;
   payment_method: 'cash' | 'card' | 'qr' | 'transfer';
+  ticket_number?: string;
+  needs_ticket?: boolean;
   created_at: string;
   product?: {
     name: string;
@@ -174,6 +176,7 @@ export const registerSale = async (saleData: Omit<Sale, 'id' | 'created_at'>): P
     .from('sales')
     .insert({
       ...saleData,
+      needs_ticket: saleData.needs_ticket ?? true, // Por defecto genera ticket
       created_at: new Date().toISOString()
     })
     .select(`
@@ -604,4 +607,33 @@ export const getTopSellingProducts = async (limit: number = 5): Promise<TopSelli
   return productsArray
     .sort((a, b) => b.total_quantity_sold - a.total_quantity_sold)
     .slice(0, limit);
+};
+
+// Obtener ventas agrupadas por número de ticket
+export const getSalesByTicketNumber = async (ticketNumber: string): Promise<Sale[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('sales')
+      .select(`
+        *,
+        product:products(name, brand, color),
+        customer:customers(name, business_name),
+        cash_session:cash_sessions(
+          vendor:vendors(name),
+          date
+        )
+      `)
+      .eq('ticket_number', ticketNumber)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching sales by ticket:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in getSalesByTicketNumber:', error);
+    throw error;
+  }
 };

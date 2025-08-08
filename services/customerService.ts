@@ -178,7 +178,7 @@ export const getTicketData = async (saleIds: number[]): Promise<TicketData> => {
     .select(`
       *,
       product:products(name, brand),
-      customer:customers!inner(*),
+      customer:customers(*),
       cash_session:cash_sessions(
         vendor:vendors(name)
       )
