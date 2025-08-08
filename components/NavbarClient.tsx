@@ -1,24 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { Home, Package, Plus, ShoppingCart, FileText, AlertTriangle, Users } from 'lucide-react'
+import { Home, Package, Plus, ShoppingCart, FileText, Users } from 'lucide-react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import AuthButton from './AuthButton'
-import { useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { Suspense } from 'react'
+import AccessDeniedAlert from './AccessDeniedAlert'
 
 export default function NavbarClient() {
   const { user, loading, isAdmin } = useAuth()
-  const searchParams = useSearchParams()
-  const [showAccessDenied, setShowAccessDenied] = useState(false)
-
-  useEffect(() => {
-    if (searchParams.get('access') === 'denied') {
-      setShowAccessDenied(true)
-      // Ocultar mensaje después de 5 segundos
-      setTimeout(() => setShowAccessDenied(false), 5000)
-    }
-  }, [searchParams])
 
   if (loading) {
     return (
@@ -34,20 +24,10 @@ export default function NavbarClient() {
 
   return (
     <>
-      {/* Mensaje de acceso denegado */}
-      {showAccessDenied && (
-        <div className="position-fixed top-0 start-50 translate-middle-x mt-3" style={{ zIndex: 1050 }}>
-          <div className="alert alert-warning alert-dismissible fade show d-flex align-items-center" role="alert">
-            <AlertTriangle className="me-2" size={16} />
-            <span>Acceso denegado. Solo los administradores pueden acceder a esa sección.</span>
-            <button 
-              type="button" 
-              className="btn-close" 
-              onClick={() => setShowAccessDenied(false)}
-            ></button>
-          </div>
-        </div>
-      )}
+      {/* Mensaje de acceso denegado con Suspense boundary */}
+      <Suspense fallback={null}>
+        <AccessDeniedAlert />
+      </Suspense>
 
       <div className="collapse navbar-collapse" id="navbarNav">
         <ul className="navbar-nav me-auto mb-2 mb-lg-0">
