@@ -70,30 +70,30 @@ export default function ViewerDashboard() {
   }
 
   return (
-    <div className="container mt-4">
+    <div className="container-fluid px-2 mt-3 overflow-hidden" style={{ maxWidth: '100%' }}>
       {/* Header */}
-      <div className="row mb-4">
+      <div className="row g-2 mb-3">
         <div className="col-12">
           <div className="card bg-primary text-white">
-            <div className="card-body">
-              <h4 className="card-title d-flex align-items-center">
+            <div className="card-body py-2">
+              <h6 className="card-title d-flex align-items-center mb-1 text-truncate">
                 <Package className="me-2" />
-                Consulta de Stock - MegaStock
-              </h4>
-              <p className="card-text mb-0">
-                Busca productos por nombre, marca o color para consultar disponibilidad
-              </p>
+                Consulta de Stock
+              </h6>
+              <small className="card-text mb-0 d-block text-truncate opacity-75">
+                Busca por nombre, marca o color
+              </small>
             </div>
           </div>
         </div>
       </div>
 
       {/* Buscador */}
-      <div className="row mb-4">
+      <div className="row g-2 mb-3">
         <div className="col-12">
           <div className="card">
-            <div className="card-body">
-              <div className="input-group input-group-lg">
+            <div className="card-body py-2">
+              <div className="input-group w-100">
                 <span className="input-group-text">
                   <Search size={20} />
                 </span>
@@ -105,7 +105,7 @@ export default function ViewerDashboard() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <small className="text-muted mt-2 d-block">
+              <small className="text-muted mt-2 d-block text-truncate">
                 Encontrados: {filteredProducts.length} productos
               </small>
             </div>
@@ -121,8 +121,8 @@ export default function ViewerDashboard() {
         </div>
       )}
 
-      {/* Resultados */}
-      <div className="row">
+      {/* Resultados en lista compacta */}
+      <div className="row g-2">
         {filteredProducts.length === 0 && !loading && (
           <div className="col-12">
             <div className="text-center py-5">
@@ -139,51 +139,33 @@ export default function ViewerDashboard() {
           </div>
         )}
 
-        {filteredProducts.map((product) => (
-          <div key={product.id} className="col-lg-4 col-md-6 mb-3">
-            <div className="card h-100">
-              {product.image && (
-                <img
-                  src={product.image}
-                  className="card-img-top"
-                  alt={product.name}
-                  style={{ height: '200px', objectFit: 'cover' }}
-                />
-              )}
-              <div className="card-body d-flex flex-column">
-                <h6 className="card-title">{product.name}</h6>
-                <p className="card-text text-muted mb-2">
-                  <strong>Marca:</strong> {product.brand}
-                </p>
-                <p className="card-text text-muted mb-2">
-                  <strong>Color:</strong> {product.color}
-                </p>
-                <p className="card-text mb-2">
-                  <strong>Precio:</strong> ${product.price.toLocaleString('es-AR')}
-                </p>
-                
-                <div className="mt-auto">
-                  <div className="d-flex justify-content-between align-items-center">
-                    <span className="fw-bold">Stock:</span>
-                    <span className={`badge ${getStockBadge(product.stock)} fs-6`}>
-                      {product.stock} unidades
-                    </span>
+        <div className="col-12">
+          <div className="list-group">
+            {filteredProducts.map((product) => (
+              <div key={product.id} className="list-group-item py-2 px-2 overflow-hidden">
+                <div className="d-flex align-items-center">
+                  <div className="flex-grow-1 me-2 overflow-hidden">
+                    <div className="fw-semibold text-truncate" title={product.name}>{product.name}</div>
+                    <small className="text-muted text-truncate d-block">
+                      {product.color ?? ''}
+                    </small>
                   </div>
-                  <small className={`text-${product.stock === 0 ? 'danger' : product.stock <= 2 ? 'warning' : 'success'} mt-1 d-block`}>
-                    {getStockText(product.stock)}
-                  </small>
+                  <div className="text-end ms-2" style={{ whiteSpace: 'nowrap' }}>
+                    <div className="small fw-semibold mb-1">${product.price.toLocaleString('es-AR')}</div>
+                    <span className={`badge rounded-pill ${getStockBadge(product.stock)}`}>{product.stock}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
 
       {/* Footer informativo */}
-      <div className="row mt-5">
+      <div className="row mt-4">
         <div className="col-12">
           <div className="card bg-light">
-            <div className="card-body text-center">
+            <div className="card-body text-center py-2">
               <small className="text-muted">
                 <strong>Nota:</strong> Esta vista es solo para consulta de stock. 
                 Para realizar ventas o modificar productos, contacta al administrador.
