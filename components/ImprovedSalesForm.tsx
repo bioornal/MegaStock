@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { CashSession, registerSale, getSalesBySession, Sale } from '@/services/vendorService';
+import { CashSession, Ticket, getTicketsBySession, createTicketWithItems, getTicketWithItems } from '@/services/vendorService';
 import { getProducts, Product } from '@/services/productService';
-import { Customer, getTicketData } from '@/services/customerService';
+import { Customer, getDefaultCustomer, TicketData } from '@/services/customerService';
 import { ShoppingCart, Plus, Trash2, CreditCard, Smartphone, DollarSign, Search, Save, AlertCircle, User, FileText, Minus, X, Package, Users, Receipt } from 'lucide-react';
 import { useDebounce } from '@/lib/hooks';
 import { salesPersistence } from '@/lib/salesPersistence';
@@ -27,7 +27,7 @@ const ImprovedSalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) =>
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [salesItems, setSalesItems] = useState<SaleItem[]>([]);
-  const [recentSales, setRecentSales] = useState<Sale[]>([]);
+  const [recentTickets, setRecentTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -42,12 +42,12 @@ const ImprovedSalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) =>
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [productsData, salesData] = await Promise.all([
+        const [productsData, ticketsData] = await Promise.all([
           getProducts(),
-          getSalesBySession(cashSession.id)
+          getTicketsBySession(cashSession.id)
         ]);
         setProducts(productsData);
-        setRecentSales(salesData);
+        setRecentTickets(ticketsData);
         
         const pendingDraft = salesPersistence.hasPendingDrafts(cashSession.vendor_id, cashSession.id);
         setHasPendingDraft(pendingDraft);
@@ -188,40 +188,74 @@ const ImprovedSalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) =>
     setError('');
 
     try {
-      // Procesar cada item como una venta individual (según la estructura actual)
-      const salePromises = salesItems.map(item => {
-        const itemSubtotal = calculateItemSubtotal(item);
-        return registerSale({
-          cash_session_id: cashSession.id,
-          customer_id: selectedCustomer?.id || null,
-          product_id: item.product.id,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-          total_amount: itemSubtotal,
-          payment_method: item.paymentMethod
-        });
+      // Validar método de pago: debe ser único para todo el ticket
+      const methods = Array.from(new Set(salesItems.map(i => i.paymentMethod)));
+      if (methods.length > 1) {
+        throw new Error('Todos los ítems deben tener el mismo método de pago para un solo ticket.');
+      }
+
+      // Construir items para la RPC
+      const itemsPayload = salesItems.map(item => ({
+        product_id: item.product.id,
+        quantity: item.quantity,
+        unit_price: item.unitPrice,
+        total_amount: calculateItemSubtotal(item),
+      }));
+
+      // Crear ticket + items en una sola transacción
+      const result = await createTicketWithItems({
+        cash_session_id: cashSession.id,
+        customer_id: selectedCustomer?.id || null,
+        payment_method: methods[0],
+        items: itemsPayload,
       });
 
-      const sales = await Promise.all(salePromises);
-      
-      // Generar datos del ticket si hay cliente
-      if (selectedCustomer && sales.length > 0) {
-        const saleIds = sales.map(sale => sale.id);
-        const ticketInfo = await getTicketData(saleIds);
-        setTicketData(ticketInfo);
-        setShowTicket(true);
-      }
+      // Cargar detalle completo para impresión/visualización
+      const detail = await getTicketWithItems(result.ticket.id);
+      // Mapear a la forma TicketData usada por TicketPrint
+      const defaultCustomer = await getDefaultCustomer();
+      const td: TicketData = {
+        ticket_number: detail.ticket.ticket_number,
+        customer: (detail.ticket.customer as any) || defaultCustomer,
+        sale_items: detail.items.map(it => {
+          const totalFinal = it.total_amount; // total con IVA
+          const subtotalNeto = totalFinal / 1.21;
+          const unitPriceFinal = it.unit_price;
+          const unitPriceNeto = unitPriceFinal / 1.21;
+          return {
+            product_name: it.product?.name || 'Producto',
+            brand: it.product?.brand || '',
+            quantity: it.quantity,
+            unit_price: unitPriceFinal,
+            total_amount: totalFinal,
+            unit_price_without_iva: unitPriceNeto,
+            subtotal_without_iva: subtotalNeto,
+          };
+        }),
+        subtotal: detail.ticket.subtotal,
+        iva_amount: detail.ticket.iva_amount,
+        total: detail.ticket.total_amount,
+        payment_method: detail.ticket.payment_method,
+        created_at: detail.ticket.created_at,
+        vendor_name: (detail.ticket.cash_session as any)?.vendor?.name || 'Vendedor',
+      };
+      setTicketData(td);
+      setShowTicket(true);
 
       // Limpiar formulario
       clearSale();
       onSaleRegistered();
 
-      // Actualizar ventas recientes
-      const updatedSales = await getSalesBySession(cashSession.id);
-      setRecentSales(updatedSales);
-
-    } catch (error: any) {
-      setError(error.message || 'Error al procesar la venta');
+      // Actualizar tickets recientes
+      try {
+        const updatedTickets = await getTicketsBySession(cashSession.id);
+        setRecentTickets(updatedTickets);
+      } catch (err) {
+        console.error('Error updating recent items:', err);
+      }
+    } catch (e: any) {
+      console.error('Error al procesar la venta:', e);
+      setError(e?.message || 'Error al procesar la venta');
     } finally {
       setIsLoading(false);
     }
@@ -276,11 +310,11 @@ const ImprovedSalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) =>
           <div className="d-flex justify-content-between align-items-center bg-light rounded p-2 shadow-sm">
             <div className="d-flex align-items-center">
               <span className="badge bg-success me-2">💰</span>
-              <small className="fw-bold">Ventas Hoy: {recentSales.length}</small>
+              <small className="fw-bold">Tickets Hoy: {recentTickets.length}</small>
             </div>
             <div className="d-flex align-items-center">
               <small className="text-muted me-2">Total:</small>
-              <strong className="text-primary">${recentSales.reduce((sum, sale) => sum + sale.total_amount, 0).toLocaleString()}</strong>
+              <strong className="text-primary">${recentTickets.reduce((sum, t) => sum + t.total_amount, 0).toLocaleString()}</strong>
             </div>
             {cashSession && (
               <div className="d-flex align-items-center">
@@ -659,37 +693,37 @@ const ImprovedSalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) =>
             </div>
           </div>
 
-          {/* Ventas Recientes Compactas */}
+          {/* Tickets Recientes Compactos */}
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-secondary text-white border-0 py-2">
               <h6 className="mb-0" style={{ fontSize: '14px' }}>
                 <FileText size={14} className="me-2" />
-                📈 Hoy: {recentSales.length} ventas - ${recentSales.reduce((sum, sale) => sum + sale.total_amount, 0).toLocaleString()}
+                📈 Hoy: {recentTickets.length} tickets - ${recentTickets.reduce((sum, t) => sum + t.total_amount, 0).toLocaleString()}
               </h6>
             </div>
             <div className="card-body p-2" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-              {recentSales.length === 0 ? (
+              {recentTickets.length === 0 ? (
                 <div className="text-center py-2">
                   <small className="text-muted">No hay ventas registradas</small>
                 </div>
               ) : (
-                recentSales.slice(0, 5).map(sale => (
-                  <div key={sale.id} className="d-flex justify-content-between align-items-center py-1 border-bottom">
+                recentTickets.slice(0, 5).map(ticket => (
+                  <div key={ticket.id} className="d-flex justify-content-between align-items-center py-1 border-bottom">
                     <div className="d-flex align-items-center">
                       <div>
                         <strong className="text-success" style={{ fontSize: '13px' }}>
-                          ${sale.total_amount.toLocaleString()}
+                          ${ticket.total_amount.toLocaleString()}
                         </strong>
                         <span className="ms-2" style={{ fontSize: '12px' }}>
-                          {sale.payment_method === 'cash' ? '💵' : 
-                           sale.payment_method === 'card' ? '💳' : 
-                           sale.payment_method === 'qr' ? '📱' : '🏦'}
+                          {ticket.payment_method === 'cash' ? '💵' : 
+                           ticket.payment_method === 'card' ? '💳' : 
+                           ticket.payment_method === 'qr' ? '📱' : '🏦'}
                         </span>
                       </div>
                     </div>
                     <div className="d-flex align-items-center">
                       <small className="text-muted me-2" style={{ fontSize: '11px' }}>
-                        {new Date(sale.created_at).toLocaleTimeString('es-CL', { 
+                        {new Date(ticket.created_at).toLocaleTimeString('es-CL', { 
                           hour: '2-digit', 
                           minute: '2-digit' 
                         })}
@@ -699,8 +733,34 @@ const ImprovedSalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) =>
                         style={{ padding: '2px 6px', fontSize: '10px' }}
                         onClick={async () => {
                           try {
-                            const ticketInfo = await getTicketData([sale.id]);
-                            setTicketData(ticketInfo);
+                            const detail = await getTicketWithItems(ticket.id);
+                            const defaultCustomer = await getDefaultCustomer();
+                            const td: TicketData = {
+                              ticket_number: detail.ticket.ticket_number,
+                              customer: (detail.ticket.customer as any) || defaultCustomer,
+                              sale_items: detail.items.map(it => {
+                                const totalFinal = it.total_amount;
+                                const subtotalNeto = totalFinal / 1.21;
+                                const unitPriceFinal = it.unit_price;
+                                const unitPriceNeto = unitPriceFinal / 1.21;
+                                return {
+                                  product_name: it.product?.name || 'Producto',
+                                  brand: it.product?.brand || '',
+                                  quantity: it.quantity,
+                                  unit_price: unitPriceFinal,
+                                  total_amount: totalFinal,
+                                  unit_price_without_iva: unitPriceNeto,
+                                  subtotal_without_iva: subtotalNeto,
+                                };
+                              }),
+                              subtotal: detail.ticket.subtotal,
+                              iva_amount: detail.ticket.iva_amount,
+                              total: detail.ticket.total_amount,
+                              payment_method: detail.ticket.payment_method,
+                              created_at: detail.ticket.created_at,
+                              vendor_name: (detail.ticket.cash_session as any)?.vendor?.name || 'Vendedor',
+                            };
+                            setTicketData(td);
                             setShowTicket(true);
                           } catch (error) {
                             console.error('Error al cargar ticket:', error);

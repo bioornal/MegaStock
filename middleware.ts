@@ -54,21 +54,21 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
 
   // Redirect to login if no session and not on the login page
-  if (!session && pathname !== '/login') {
+  if (!user && pathname !== '/login') {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
   // Redirect to home if there is a session and user tries to access login page
-  if (session && pathname === '/login') {
+  if (user && pathname === '/login') {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
   // Si hay sesión, verificar permisos para rutas protegidas
-  if (session) {
+  if (user) {
     try {
       // SOLUCIÓN TEMPORAL: Asignar roles basado en email hasta que se configure la BD
       let userRole = 'viewer' // Por defecto viewer
@@ -79,7 +79,7 @@ export async function middleware(request: NextRequest) {
         'admin@megastock.com'
       ]
       
-      if (adminEmails.includes(session.user.email || '')) {
+      if (adminEmails.includes(user.email || '')) {
         userRole = 'admin'
       }
 
@@ -88,7 +88,7 @@ export async function middleware(request: NextRequest) {
         const { data: roleData, error: roleError } = await supabase
           .from('user_roles')
           .select('role')
-          .eq('user_id', session.user.id)
+          .eq('user_id', user.id)
           .single()
 
         if (!roleError && roleData) {
@@ -125,7 +125,7 @@ export async function middleware(request: NextRequest) {
       console.error('Error checking user role:', error)
       // En caso de error, permitir acceso para admins conocidos
       const adminEmails = ['spezialichristian@gmail.com', 'admin@megastock.com']
-      if (!adminEmails.includes(session.user.email || '')) {
+      if (!adminEmails.includes(user.email || '')) {
         return NextResponse.redirect(new URL('/?access=denied', request.url))
       }
     }

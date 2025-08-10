@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getAllSales, searchSales, SalesResponse, Sale } from '@/services/vendorService';
-import { getTicketData } from '@/services/customerService';
+import { getAllTickets, searchTickets, TicketResponse, Ticket, getTicketWithItems } from '@/services/vendorService';
+import { getDefaultCustomer, TicketData } from '@/services/customerService';
 import { useDebounce } from '@/lib/hooks';
 import TicketPrint from '@/components/TicketPrint';
 import { FileText } from 'lucide-react';
@@ -22,8 +22,8 @@ const PAYMENT_METHOD_COLORS = {
 };
 
 export default function SalesRegistryPage() {
-  const [salesData, setSalesData] = useState<SalesResponse>({
-    sales: [],
+  const [ticketsData, setTicketsData] = useState<TicketResponse>({
+    tickets: [],
     totalCount: 0,
     totalPages: 0,
     currentPage: 1
@@ -38,9 +38,6 @@ export default function SalesRegistryPage() {
   
   // Filtros
   const [filters, setFilters] = useState({
-    vendorName: '',
-    customerName: '',
-    productName: '',
     paymentMethod: '',
     dateFrom: '',
     dateTo: ''
@@ -48,98 +45,71 @@ export default function SalesRegistryPage() {
   
   const debouncedFilters = useDebounce(filters, 500);
 
-  const loadSales = async (page: number = 1) => {
+  const loadTickets = async (page: number = 1) => {
     try {
       setLoading(true);
       setError(null);
       
-      // Si hay filtros activos, usar búsqueda
       const hasFilters = Object.values(debouncedFilters).some(value => value !== '');
-      
-      let response: SalesResponse;
+      let response: TicketResponse;
       if (hasFilters) {
-        response = await searchSales(page, 20, debouncedFilters);
+        response = await searchTickets(page, 20, debouncedFilters as any);
       } else {
-        response = await getAllSales(page, 20);
+        response = await getAllTickets(page, 20);
       }
-      
-      setSalesData(response);
+      setTicketsData(response);
     } catch (err) {
       console.error('Error loading sales:', err);
-      setError('Error al cargar las ventas');
+      setError('Error al cargar los tickets');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadSales(1);
+    loadTickets(1);
   }, [debouncedFilters]);
 
   const handlePageChange = (page: number) => {
-    loadSales(page);
+    loadTickets(page);
   };
 
   const clearFilters = () => {
-    setFilters({
-      vendorName: '',
-      customerName: '',
-      productName: '',
-      paymentMethod: '',
-      dateFrom: '',
-      dateTo: ''
-    });
-  };
-
-  // Función para agrupar ventas por ticket_number
-  const groupSalesByTicket = (sales: Sale[]) => {
-    const grouped = new Map<string, {
-      ticket_number: string;
-      sales: Sale[];
-      total_amount: number;
-      created_at: string;
-      vendor_name: string;
-      customer: any;
-      payment_methods: string[];
-    }>();
-
-    sales.forEach(sale => {
-      const ticketKey = sale.ticket_number || `individual-${sale.id}`;
-      
-      if (!grouped.has(ticketKey)) {
-        grouped.set(ticketKey, {
-          ticket_number: ticketKey,
-          sales: [],
-          total_amount: 0,
-          created_at: sale.created_at,
-          vendor_name: sale.cash_session?.vendor?.name || 'N/A',
-          customer: sale.customer,
-          payment_methods: []
-        });
-      }
-
-      const group = grouped.get(ticketKey)!;
-      group.sales.push(sale);
-      group.total_amount += sale.total_amount;
-      
-      // Agregar método de pago si no está ya incluido
-      if (!group.payment_methods.includes(sale.payment_method)) {
-        group.payment_methods.push(sale.payment_method);
-      }
-    });
-
-    return Array.from(grouped.values()).sort((a, b) => 
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+    setFilters({ paymentMethod: '', dateFrom: '', dateTo: '' });
   };
 
   // Funciones para manejar tickets
-  const handleShowGroupTicket = async (groupedSale: any) => {
+  const handleShowTicket = async (ticket: Ticket) => {
     try {
       setTicketLoading(true);
-      const saleIds = groupedSale.sales.map((sale: Sale) => sale.id);
-      const ticketInfo = await getTicketData(saleIds);
-      setTicketData(ticketInfo);
+      const detail = await getTicketWithItems(ticket.id);
+      const defaultCustomer = await getDefaultCustomer();
+      const td: TicketData = {
+        ticket_number: ticket.ticket_number,
+        customer: (ticket.customer as any) || defaultCustomer,
+        sale_items: detail.items.map(it => {
+          const totalFinal = it.total_amount;
+          const subtotalNeto = totalFinal / 1.21;
+          const unitPriceFinal = it.unit_price;
+          const unitPriceNeto = unitPriceFinal / 1.21;
+          return {
+            product_name: it.product?.name || 'Producto',
+            brand: it.product?.brand || '',
+            quantity: it.quantity,
+            unit_price: unitPriceFinal,
+            total_amount: totalFinal,
+            unit_price_without_iva: unitPriceNeto,
+            subtotal_without_iva: subtotalNeto,
+          };
+        }),
+        subtotal: ticket.subtotal,
+        iva_amount: ticket.iva_amount,
+        total: ticket.total_amount,
+        payment_method: ticket.payment_method,
+        created_at: ticket.created_at,
+        vendor_name: (ticket.cash_session as any)?.vendor?.name || 'Vendedor',
+      };
+      setTicketData(td);
       setShowTicket(true);
     } catch (error) {
       console.error('Error generando ticket:', error);
@@ -190,7 +160,7 @@ export default function SalesRegistryPage() {
                 </h4>
                 <div className="text-end">
                   <small>
-                    Total: {salesData.totalCount} ventas
+                    Total: {ticketsData.totalCount} tickets
                   </small>
                 </div>
               </div>
@@ -205,40 +175,7 @@ export default function SalesRegistryPage() {
                       <h6 className="card-title mb-3">🔍 Filtros de Búsqueda</h6>
                       
                       <div className="row g-3">
-                        <div className="col-md-3">
-                          <label className="form-label">Vendedor</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Buscar por vendedor..."
-                            value={filters.vendorName}
-                            onChange={(e) => setFilters({...filters, vendorName: e.target.value})}
-                          />
-                        </div>
-                        
-                        <div className="col-md-3">
-                          <label className="form-label">Cliente</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Buscar por cliente..."
-                            value={filters.customerName}
-                            onChange={(e) => setFilters({...filters, customerName: e.target.value})}
-                          />
-                        </div>
-                        
-                        <div className="col-md-3">
-                          <label className="form-label">Producto</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Buscar por producto..."
-                            value={filters.productName}
-                            onChange={(e) => setFilters({...filters, productName: e.target.value})}
-                          />
-                        </div>
-                        
-                        <div className="col-md-3">
+                        <div className="col-md-4">
                           <label className="form-label">Método de Pago</label>
                           <select
                             className="form-select"
@@ -288,21 +225,21 @@ export default function SalesRegistryPage() {
                 </div>
               </div>
 
-              {/* Tabla de Ventas */}
+              {/* Tabla de Tickets */}
               {loading ? (
                 <div className="text-center py-5">
                   <div className="spinner-border text-primary" role="status">
                     <span className="visually-hidden">Cargando...</span>
                   </div>
-                  <p className="mt-2">Cargando ventas...</p>
+                  <p className="mt-2">Cargando tickets...</p>
                 </div>
               ) : error ? (
                 <div className="alert alert-danger" role="alert">
                   {error}
                 </div>
-              ) : salesData.sales.length === 0 ? (
+              ) : ticketsData.tickets.length === 0 ? (
                 <div className="text-center py-5">
-                  <h5 className="text-muted">📭 No se encontraron ventas</h5>
+                  <h5 className="text-muted">📭 No se encontraron tickets</h5>
                   <p className="text-muted">Intenta ajustar los filtros de búsqueda</p>
                 </div>
               ) : (
@@ -315,44 +252,29 @@ export default function SalesRegistryPage() {
                           <th>Fecha</th>
                           <th>Vendedor</th>
                           <th>Cliente</th>
-                          <th>Productos</th>
-                          <th>Items</th>
                           <th>Total</th>
-                          <th>Métodos Pago</th>
+                          <th>Método Pago</th>
                           <th>Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {groupSalesByTicket(salesData.sales).map((groupedSale, index) => (
-                          <tr key={groupedSale.ticket_number}>
+                        {ticketsData.tickets.map((t) => (
+                          <tr key={t.id}>
                             <td>
-                              <div>
-                                <small className="text-muted d-block">
-                                  {groupedSale.ticket_number.startsWith('individual-') 
-                                    ? `#${groupedSale.sales[0].id}` 
-                                    : groupedSale.ticket_number}
-                                </small>
-                                {groupedSale.sales.length > 1 && (
-                                  <span className="badge bg-success">
-                                    {groupedSale.sales.length} productos
-                                  </span>
-                                )}
-                              </div>
+                              <small className="text-muted d-block">{t.ticket_number}</small>
                             </td>
                             <td>
-                              <small>{formatDate(groupedSale.created_at)}</small>
+                              <small>{formatDate(t.created_at)}</small>
                             </td>
                             <td>
-                              <span className="badge bg-secondary">
-                                {groupedSale.vendor_name}
-                              </span>
+                              <span className="badge bg-secondary">{(t.cash_session as any)?.vendor?.name || 'N/A'}</span>
                             </td>
                             <td>
-                              {groupedSale.customer ? (
+                              {t.customer ? (
                                 <div>
-                                  <div className="fw-bold">{groupedSale.customer.name}</div>
-                                  {groupedSale.customer.business_name && (
-                                    <small className="text-muted">{groupedSale.customer.business_name}</small>
+                                  <div className="fw-bold">{(t.customer as any)?.name}</div>
+                                  {(t.customer as any)?.business_name && (
+                                    <small className="text-muted">{(t.customer as any)?.business_name}</small>
                                   )}
                                 </div>
                               ) : (
@@ -360,54 +282,23 @@ export default function SalesRegistryPage() {
                               )}
                             </td>
                             <td>
-                              <div className="d-flex flex-column gap-1">
-                                {groupedSale.sales.map((sale, saleIndex) => (
-                                  <div key={sale.id} className="d-flex align-items-center gap-2">
-                                    <span className="badge bg-info">{sale.quantity}</span>
-                                    <div>
-                                      <div className="fw-bold small">{sale.product?.name || 'N/A'}</div>
-                                      <small className="text-muted">
-                                        {sale.product?.brand} {sale.product?.color && `- ${sale.product.color}`}
-                                      </small>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </td>
-                            <td>
-                              <span className="badge bg-primary">
-                                {groupedSale.sales.reduce((total, sale) => total + sale.quantity, 0)} items
-                              </span>
-                            </td>
-                            <td>
                               <strong className="text-success">
-                                {formatCurrency(groupedSale.total_amount)}
+                                {formatCurrency(t.total_amount)}
                               </strong>
                             </td>
                             <td>
-                              <div className="d-flex flex-wrap gap-1">
-                                {groupedSale.payment_methods.map((method, methodIndex) => (
-                                  <span key={methodIndex} className={`badge bg-${PAYMENT_METHOD_COLORS[method as keyof typeof PAYMENT_METHOD_COLORS]}`}>
-                                    {PAYMENT_METHOD_LABELS[method as keyof typeof PAYMENT_METHOD_LABELS]}
-                                  </span>
-                                ))}
-                              </div>
+                              <span className={`badge bg-${PAYMENT_METHOD_COLORS[t.payment_method as keyof typeof PAYMENT_METHOD_COLORS]}`}>
+                                {PAYMENT_METHOD_LABELS[t.payment_method as keyof typeof PAYMENT_METHOD_LABELS]}
+                              </span>
                             </td>
                             <td>
                               <button
                                 type="button"
                                 className="btn btn-outline-primary btn-sm"
-                                onClick={() => handleShowGroupTicket(groupedSale)}
+                                onClick={() => handleShowTicket(t)}
                                 disabled={ticketLoading}
-                                title="Ver e imprimir ticket completo"
                               >
-                                {ticketLoading ? (
-                                  <div className="spinner-border spinner-border-sm" role="status">
-                                    <span className="visually-hidden">Cargando...</span>
-                                  </div>
-                                ) : (
-                                  <FileText size={14} />
-                                )}
+                                <FileText size={16} className="me-1" /> Ver Ticket
                               </button>
                             </td>
                           </tr>
@@ -417,62 +308,15 @@ export default function SalesRegistryPage() {
                   </div>
 
                   {/* Paginación */}
-                  {salesData.totalPages > 1 && (
+                  {ticketsData.totalPages > 1 && (
                     <div className="d-flex justify-content-between align-items-center mt-4">
                       <div>
-                        <small className="text-muted">
-                          Página {salesData.currentPage} de {salesData.totalPages} 
-                          ({salesData.totalCount} ventas en total)
-                        </small>
+                        <small>Mostrando página {ticketsData.currentPage} de {ticketsData.totalPages}</small>
                       </div>
-                      
-                      <nav>
-                        <ul className="pagination pagination-sm mb-0">
-                          <li className={`page-item ${salesData.currentPage === 1 ? 'disabled' : ''}`}>
-                            <button
-                              className="page-link"
-                              onClick={() => handlePageChange(salesData.currentPage - 1)}
-                              disabled={salesData.currentPage === 1}
-                            >
-                              Anterior
-                            </button>
-                          </li>
-                          
-                          {Array.from({ length: Math.min(5, salesData.totalPages) }, (_, i) => {
-                            let pageNum;
-                            if (salesData.totalPages <= 5) {
-                              pageNum = i + 1;
-                            } else if (salesData.currentPage <= 3) {
-                              pageNum = i + 1;
-                            } else if (salesData.currentPage >= salesData.totalPages - 2) {
-                              pageNum = salesData.totalPages - 4 + i;
-                            } else {
-                              pageNum = salesData.currentPage - 2 + i;
-                            }
-                            
-                            return (
-                              <li key={pageNum} className={`page-item ${salesData.currentPage === pageNum ? 'active' : ''}`}>
-                                <button
-                                  className="page-link"
-                                  onClick={() => handlePageChange(pageNum)}
-                                >
-                                  {pageNum}
-                                </button>
-                              </li>
-                            );
-                          })}
-                          
-                          <li className={`page-item ${salesData.currentPage === salesData.totalPages ? 'disabled' : ''}`}>
-                            <button
-                              className="page-link"
-                              onClick={() => handlePageChange(salesData.currentPage + 1)}
-                              disabled={salesData.currentPage === salesData.totalPages}
-                            >
-                              Siguiente
-                            </button>
-                          </li>
-                        </ul>
-                      </nav>
+                      <div className="btn-group">
+                        <button className="btn btn-outline-secondary" disabled={ticketsData.currentPage <= 1} onClick={() => handlePageChange(ticketsData.currentPage - 1)}>Anterior</button>
+                        <button className="btn btn-outline-secondary" disabled={ticketsData.currentPage >= ticketsData.totalPages} onClick={() => handlePageChange(ticketsData.currentPage + 1)}>Siguiente</button>
+                      </div>
                     </div>
                   )}
                 </>

@@ -61,6 +61,28 @@ export interface SalesResponse {
   currentPage: number;
 }
 
+// Nuevo modelo: Ticket maestro y respuesta
+export interface Ticket {
+  id: number;
+  cash_session_id: number;
+  customer_id?: number | null;
+  ticket_number: string;
+  payment_method: 'cash' | 'card' | 'qr' | 'transfer';
+  subtotal: number;
+  iva_amount: number;
+  total_amount: number;
+  created_at: string;
+  customer?: { name: string; business_name?: string } | null;
+  cash_session?: { vendor: { name: string }, date: string } | null;
+}
+
+export interface TicketResponse {
+  tickets: Ticket[];
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+}
+
 export interface TopSellingProduct {
   product_id: number;
   product_name: string;
@@ -87,6 +109,167 @@ export const getActiveVendors = async (): Promise<Vendor[]> => {
   return data || [];
 };
 
+// Listar tickets con paginación (simple) y conteo total
+export const getAllTickets = async (page: number = 1, pageSize: number = 20): Promise<TicketResponse> => {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const query = supabase
+    .from('tickets')
+    .select(`
+      *,
+      customer:customers(*),
+      cash_session:cash_sessions(vendor:vendors(name), date)
+    `, { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  const { data, error, count } = await query;
+  if (error) {
+    console.error('Error fetching tickets:', error);
+    throw error;
+  }
+
+  const totalCount = count || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
+  return {
+    tickets: (data || []) as Ticket[],
+    totalCount,
+    totalPages,
+    currentPage: page,
+  };
+};
+
+// Buscar tickets con filtros básicos (método de pago y rango de fechas)
+export const searchTickets = async (
+  page: number = 1,
+  pageSize: number = 20,
+  filters: {
+    paymentMethod?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  } = {}
+): Promise<TicketResponse> => {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
+    .from('tickets')
+    .select(`
+      *,
+      customer:customers(*),
+      cash_session:cash_sessions(vendor:vendors(name), date)
+    `, { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (filters.paymentMethod) {
+    query = query.eq('payment_method', filters.paymentMethod);
+  }
+  if (filters.dateFrom) {
+    query = query.gte('created_at', `${filters.dateFrom}T00:00:00.000Z`);
+  }
+  if (filters.dateTo) {
+    query = query.lte('created_at', `${filters.dateTo}T23:59:59.999Z`);
+  }
+
+  const { data, error, count } = await query;
+  if (error) {
+    console.error('Error searching tickets:', error);
+    throw error;
+  }
+
+  const totalCount = count || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
+  return {
+    tickets: (data || []) as Ticket[],
+    totalCount,
+    totalPages,
+    currentPage: page,
+  };
+};
+
+// -------------------- NUEVO FLUJO DE TICKETS --------------------
+
+// Crear ticket con items (llama a la RPC/función de Postgres)
+export const createTicketWithItems = async (args: {
+  cash_session_id: number;
+  customer_id: number | null;
+  payment_method: 'cash' | 'card' | 'qr' | 'transfer';
+  items: { product_id: number; quantity: number; unit_price: number; total_amount: number }[];
+}): Promise<{ ticket: Ticket; items: any[] }> => {
+  const payload = {
+    p_cash_session_id: args.cash_session_id,
+    p_customer_id: args.customer_id ?? 0,
+    p_payment_method: args.payment_method,
+    p_items: args.items as any
+  };
+
+  const { data, error } = await supabase.rpc('create_ticket_with_items', payload);
+  if (error) {
+    console.error('Error create_ticket_with_items:', error);
+    throw error;
+  }
+  // data: { ticket: {...}, items: [...] }
+  return data as { ticket: Ticket; items: any[] };
+};
+
+// Tickets por sesión de caja (para cabecera y listados)
+export const getTicketsBySession = async (sessionId: number): Promise<Ticket[]> => {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select(`
+      *,
+      customer:customers(name, business_name),
+      cash_session:cash_sessions(vendor:vendors(name), date)
+    `)
+    .eq('cash_session_id', sessionId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching tickets by session:', error);
+    throw error;
+  }
+  return data || [];
+};
+
+// Traer ticket con items para impresión/detalle
+export const getTicketWithItems = async (ticketId: number): Promise<{
+  ticket: Ticket;
+  items: Array<{ id: number; product_id: number; quantity: number; unit_price: number; total_amount: number; product: { name: string; brand: string; color?: string } }>;
+}> => {
+  const { data: ticketData, error: tErr } = await supabase
+    .from('tickets')
+    .select(`
+      *,
+      customer:customers(*),
+      cash_session:cash_sessions(vendor:vendors(name), date)
+    `)
+    .eq('id', ticketId)
+    .single();
+
+  if (tErr) {
+    console.error('Error fetching ticket:', tErr);
+    throw tErr;
+  }
+
+  const { data: itemsData, error: iErr } = await supabase
+    .from('sale_items')
+    .select(`
+      *,
+      product:products(name, brand, color)
+    `)
+    .eq('ticket_id', ticketId)
+    .order('id');
+
+  if (iErr) {
+    console.error('Error fetching ticket items:', iErr);
+    throw iErr;
+  }
+
+  return { ticket: ticketData as Ticket, items: (itemsData || []) as any };
+};
+
 // Crear nuevo vendedor
 export const createVendor = async (vendorData: Omit<Vendor, 'id' | 'created_at'>): Promise<Vendor> => {
   const { data, error } = await supabase
@@ -100,6 +283,20 @@ export const createVendor = async (vendorData: Omit<Vendor, 'id' | 'created_at'>
     throw error;
   }
   return data;
+};
+
+// Asignar ticket_number a un conjunto de ventas (fallback si el trigger no lo generó)
+export const assignTicketToSales = async (saleIds: number[], ticketNumber: string): Promise<void> => {
+  if (!saleIds.length) return;
+  const { error } = await supabase
+    .from('sales')
+    .update({ ticket_number: ticketNumber, needs_ticket: true })
+    .in('id', saleIds);
+
+  if (error) {
+    console.error('Error assigning ticket to sales:', error);
+    throw error;
+  }
 };
 
 // Abrir caja diaria
