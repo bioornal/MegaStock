@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getAllTickets, searchTickets, TicketResponse, Ticket, getTicketWithItems } from '@/services/vendorService';
-import { getDefaultCustomer, TicketData } from '@/services/customerService';
+import { getAllTickets, searchTickets, TicketResponse, Ticket, getTicketWithItems, getAllSales, searchSales, SalesResponse, Sale } from '@/services/vendorService';
+import { getDefaultCustomer, TicketData, getTicketData } from '@/services/customerService';
+
 import { useDebounce } from '@/lib/hooks';
 import TicketPrint from '@/components/TicketPrint';
 import { FileText } from 'lucide-react';
@@ -22,8 +23,15 @@ const PAYMENT_METHOD_COLORS = {
 };
 
 export default function SalesRegistryPage() {
+  const [mode, setMode] = useState<'tickets' | 'sales'>('tickets');
   const [ticketsData, setTicketsData] = useState<TicketResponse>({
     tickets: [],
+    totalCount: 0,
+    totalPages: 0,
+    currentPage: 1
+  });
+  const [salesData, setSalesData] = useState<SalesResponse>({
+    sales: [],
     totalCount: 0,
     totalPages: 0,
     currentPage: 1
@@ -66,12 +74,40 @@ export default function SalesRegistryPage() {
     }
   };
 
+  const loadSales = async (page: number = 1) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const hasFilters = Object.values(debouncedFilters).some(value => value !== '');
+      let response: SalesResponse;
+      if (hasFilters) {
+        response = await searchSales(page, 20, debouncedFilters as any);
+      } else {
+        response = await getAllSales(page, 20);
+      }
+      setSalesData(response);
+    } catch (err) {
+      console.error('Error loading sales:', err);
+      setError('Error al cargar las ventas históricas');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    loadTickets(1);
-  }, [debouncedFilters]);
+    if (mode === 'tickets') {
+      loadTickets(1);
+    } else {
+      loadSales(1);
+    }
+  }, [debouncedFilters, mode]);
 
   const handlePageChange = (page: number) => {
-    loadTickets(page);
+    if (mode === 'tickets') {
+      loadTickets(page);
+    } else {
+      loadSales(page);
+    }
   };
 
   const clearFilters = () => {
@@ -160,13 +196,29 @@ export default function SalesRegistryPage() {
                 </h4>
                 <div className="text-end">
                   <small>
-                    Total: {ticketsData.totalCount} tickets
+                    {mode === 'tickets' ? (
+                      <>Total: {ticketsData.totalCount} tickets</>
+                    ) : (
+                      <>Total: {salesData.totalCount} ventas</>
+                    )}
                   </small>
                 </div>
               </div>
             </div>
 
             <div className="card-body">
+              {/* Toggle modo */}
+              <div className="mb-3">
+                <ul className="nav nav-pills">
+                  <li className="nav-item">
+                    <button className={`nav-link ${mode === 'tickets' ? 'active' : ''}`} onClick={() => setMode('tickets')}>Tickets (nuevo)</button>
+                  </li>
+                  <li className="nav-item ms-2">
+                    <button className={`nav-link ${mode === 'sales' ? 'active' : ''}`} onClick={() => setMode('sales')}>Histórico (sales)</button>
+                  </li>
+                </ul>
+              </div>
+
               {/* Filtros */}
               <div className="row mb-4">
                 <div className="col-12">
@@ -225,97 +277,171 @@ export default function SalesRegistryPage() {
                 </div>
               </div>
 
-              {/* Tabla de Tickets */}
+              {/* Tabla de Tickets o Ventas */}
               {loading ? (
                 <div className="text-center py-5">
                   <div className="spinner-border text-primary" role="status">
                     <span className="visually-hidden">Cargando...</span>
                   </div>
-                  <p className="mt-2">Cargando tickets...</p>
+                  <p className="mt-2">{mode === 'tickets' ? 'Cargando tickets...' : 'Cargando ventas...'}</p>
                 </div>
               ) : error ? (
                 <div className="alert alert-danger" role="alert">
                   {error}
                 </div>
-              ) : ticketsData.tickets.length === 0 ? (
+              ) : (mode === 'tickets' ? ticketsData.tickets.length === 0 : salesData.sales.length === 0) ? (
                 <div className="text-center py-5">
-                  <h5 className="text-muted">📭 No se encontraron tickets</h5>
+                  <h5 className="text-muted">📭 {mode === 'tickets' ? 'No se encontraron tickets' : 'No se encontraron ventas'}</h5>
                   <p className="text-muted">Intenta ajustar los filtros de búsqueda</p>
                 </div>
               ) : (
                 <>
-                  <div className="table-responsive">
-                    <table className="table table-striped table-hover">
-                      <thead className="table-dark">
-                        <tr>
-                          <th>Ticket</th>
-                          <th>Fecha</th>
-                          <th>Vendedor</th>
-                          <th>Cliente</th>
-                          <th>Total</th>
-                          <th>Método Pago</th>
-                          <th>Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ticketsData.tickets.map((t) => (
-                          <tr key={t.id}>
-                            <td>
-                              <small className="text-muted d-block">{t.ticket_number}</small>
-                            </td>
-                            <td>
-                              <small>{formatDate(t.created_at)}</small>
-                            </td>
-                            <td>
-                              <span className="badge bg-secondary">{(t.cash_session as any)?.vendor?.name || 'N/A'}</span>
-                            </td>
-                            <td>
-                              {t.customer ? (
-                                <div>
-                                  <div className="fw-bold">{(t.customer as any)?.name}</div>
-                                  {(t.customer as any)?.business_name && (
-                                    <small className="text-muted">{(t.customer as any)?.business_name}</small>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-muted">Sin cliente</span>
-                              )}
-                            </td>
-                            <td>
-                              <strong className="text-success">
-                                {formatCurrency(t.total_amount)}
-                              </strong>
-                            </td>
-                            <td>
-                              <span className={`badge bg-${PAYMENT_METHOD_COLORS[t.payment_method as keyof typeof PAYMENT_METHOD_COLORS]}`}>
-                                {PAYMENT_METHOD_LABELS[t.payment_method as keyof typeof PAYMENT_METHOD_LABELS]}
-                              </span>
-                            </td>
-                            <td>
-                              <button
-                                type="button"
-                                className="btn btn-outline-primary btn-sm"
-                                onClick={() => handleShowTicket(t)}
-                                disabled={ticketLoading}
-                              >
-                                <FileText size={16} className="me-1" /> Ver Ticket
-                              </button>
-                            </td>
+                  {mode === 'tickets' ? (
+                    <div className="table-responsive">
+                      <table className="table table-striped table-hover">
+                        <thead className="table-dark">
+                          <tr>
+                            <th>Ticket</th>
+                            <th>Fecha</th>
+                            <th>Vendedor</th>
+                            <th>Cliente</th>
+                            <th>Total</th>
+                            <th>Método Pago</th>
+                            <th>Acciones</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {ticketsData.tickets.map((t) => (
+                            <tr key={t.id}>
+                              <td>
+                                <small className="text-muted d-block">{t.ticket_number}</small>
+                              </td>
+                              <td>
+                                <small>{formatDate(t.created_at)}</small>
+                              </td>
+                              <td>
+                                <span className="badge bg-secondary">{(t.cash_session as any)?.vendor?.name || 'N/A'}</span>
+                              </td>
+                              <td>
+                                {t.customer ? (
+                                  <div>
+                                    <div className="fw-bold">{(t.customer as any)?.name}</div>
+                                    {(t.customer as any)?.business_name && (
+                                      <small className="text-muted">{(t.customer as any)?.business_name}</small>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted">Sin cliente</span>
+                                )}
+                              </td>
+                              <td>
+                                <strong className="text-success">
+                                  {formatCurrency(t.total_amount)}
+                                </strong>
+                              </td>
+                              <td>
+                                <span className={`badge bg-${PAYMENT_METHOD_COLORS[t.payment_method as keyof typeof PAYMENT_METHOD_COLORS]}`}>
+                                  {PAYMENT_METHOD_LABELS[t.payment_method as keyof typeof PAYMENT_METHOD_LABELS]}
+                                </span>
+                              </td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-primary btn-sm"
+                                  onClick={() => handleShowTicket(t)}
+                                  disabled={ticketLoading}
+                                >
+                                  <FileText size={16} className="me-1" /> Ver Ticket
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="table-responsive">
+                      <table className="table table-striped table-hover">
+                        <thead className="table-dark">
+                          <tr>
+                            <th>Fecha</th>
+                            <th>Vendedor</th>
+                            <th>Cliente</th>
+                            <th>Producto</th>
+                            <th>Cant.</th>
+                            <th>Total</th>
+                            <th>Método</th>
+                            <th>Ticket</th>
+                            <th>Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {salesData.sales.map((s: Sale) => (
+                            <tr key={s.id}>
+                              <td><small>{formatDate(s.created_at)}</small></td>
+                              <td><span className="badge bg-secondary">{(s.cash_session as any)?.vendor?.name || 'N/A'}</span></td>
+                              <td>
+                                {s.customer ? (
+                                  <div>
+                                    <div className="fw-bold">{(s.customer as any)?.name}</div>
+                                    {(s.customer as any)?.business_name && (
+                                      <small className="text-muted">{(s.customer as any)?.business_name}</small>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted">Sin cliente</span>
+                                )}
+                              </td>
+                              <td>
+                                <div>
+                                  <div className="fw-bold">{s.product?.name || 'Producto'}</div>
+                                  <small className="text-muted">{s.product?.brand}{s.product?.color ? ` • ${s.product.color}` : ''}</small>
+                                </div>
+                              </td>
+                              <td>{s.quantity}</td>
+                              <td><strong className="text-success">{formatCurrency(s.total_amount)}</strong></td>
+                              <td>
+                                <span className={`badge bg-${PAYMENT_METHOD_COLORS[s.payment_method as keyof typeof PAYMENT_METHOD_COLORS]}`}>
+                                  {PAYMENT_METHOD_LABELS[s.payment_method as keyof typeof PAYMENT_METHOD_LABELS]}
+                                </span>
+                              </td>
+                              <td><small className="text-muted">{s.ticket_number || '-'}</small></td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-primary btn-sm"
+                                  onClick={async () => {
+                                    try {
+                                      const td = await getTicketData([s.id]);
+                                      setTicketData(td);
+                                      setShowTicket(true);
+                                    } catch (e) {
+                                      console.error('Error al generar ticket legacy:', e);
+                                      setError('Error al generar el ticket');
+                                    }
+                                  }}
+                                >
+                                  <FileText size={16} className="me-1" /> Ver Ticket
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
 
                   {/* Paginación */}
-                  {ticketsData.totalPages > 1 && (
+                  {(mode === 'tickets' ? ticketsData.totalPages : salesData.totalPages) > 1 && (
                     <div className="d-flex justify-content-between align-items-center mt-4">
                       <div>
-                        <small>Mostrando página {ticketsData.currentPage} de {ticketsData.totalPages}</small>
+                        <small>
+                          Mostrando página {mode === 'tickets' ? ticketsData.currentPage : salesData.currentPage} de {mode === 'tickets' ? ticketsData.totalPages : salesData.totalPages}
+                        </small>
                       </div>
                       <div className="btn-group">
-                        <button className="btn btn-outline-secondary" disabled={ticketsData.currentPage <= 1} onClick={() => handlePageChange(ticketsData.currentPage - 1)}>Anterior</button>
-                        <button className="btn btn-outline-secondary" disabled={ticketsData.currentPage >= ticketsData.totalPages} onClick={() => handlePageChange(ticketsData.currentPage + 1)}>Siguiente</button>
+                        <button className="btn btn-outline-secondary" disabled={(mode === 'tickets' ? ticketsData.currentPage : salesData.currentPage) <= 1} onClick={() => handlePageChange((mode === 'tickets' ? ticketsData.currentPage : salesData.currentPage) - 1)}>Anterior</button>
+                        <button className="btn btn-outline-secondary" disabled={(mode === 'tickets' ? ticketsData.currentPage : salesData.currentPage) >= (mode === 'tickets' ? ticketsData.totalPages : salesData.totalPages)} onClick={() => handlePageChange((mode === 'tickets' ? ticketsData.currentPage : salesData.currentPage) + 1)}>Siguiente</button>
                       </div>
                     </div>
                   )}
