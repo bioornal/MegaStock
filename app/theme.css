@@ -1,0 +1,89 @@
+/* Global Theme for MegaStock - overrides Bootstrap CSS variables */
+:root {
+  /* Primary palette */
+  --bs-primary: #2b6cb0; /* blue-700 */
+  --bs-primary-rgb: 43, 108, 176;
+
+  /* Success palette */
+  --bs-success: #2f855a; /* green-700 */
+  --bs-success-rgb: 47, 133, 90;
+
+  /* Info palette */
+  --bs-info: #3182ce; /* blue-600 */
+  --bs-info-rgb: 49, 130, 206;
+
+  /* Secondary / Neutral */
+  --bs-secondary: #4a5568; /* gray-700 */
+  --bs-secondary-rgb: 74, 85, 104;
+
+  /* Warning & Danger */
+  --bs-warning: #d69e2e; /* amber-600 */
+  --bs-warning-rgb: 214, 158, 46;
+  --bs-danger: #e53e3e; /* red-600 */
+  --bs-danger-rgb: 229, 62, 62;
+
+  /* Light & Dark */
+  --bs-light: #f7fafc;
+  --bs-light-rgb: 247, 250, 252;
+  --bs-dark: #1a202c;
+  --bs-dark-rgb: 26, 32, 44;
+
+  /* Body background/text */
+  --bs-body-bg: #f8f9fb;
+  --bs-body-color: #1f2937; /* slate-800 */
+
+  /* Card styling */
+  --ms-card-radius: 0.75rem;
+  --ms-shadow-sm: 0 2px 10px rgba(0,0,0,0.08);
+  --ms-shadow-md: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+/* Global base tweaks */
+body {
+  background-color: var(--bs-body-bg);
+  color: var(--bs-body-color);
+}
+
+.card {
+  border-radius: var(--ms-card-radius);
+  box-shadow: var(--ms-shadow-sm);
+}
+
+.card.border-0.shadow-sm { box-shadow: var(--ms-shadow-sm) !important; }
+.card.shadow-sm:hover { box-shadow: var(--ms-shadow-md) !important; }
+
+/* Offcanvas (ticket drawer) */
+.offcanvas-header {
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.offcanvas .btn-close {
+  filter: none;
+}
+
+/* Buttons emphasis */
+.btn-primary {
+  color: #fff;
+}
+.btn-info {
+  color: #fff;
+}
+
+/* Badges */
+.badge.bg-success { background-color: var(--bs-success) !important; }
+.badge.bg-info { background-color: var(--bs-info) !important; }
+.badge.bg-secondary { background-color: var(--bs-secondary) !important; }
+.badge.bg-warning { background-color: var(--bs-warning) !important; }
+.badge.bg-danger { background-color: var(--bs-danger) !important; }
+
+/* Inputs */
+.input-group-text.bg-primary { background-color: var(--bs-primary) !important; }
+
+/* Navbar optional base (if used) */
+.navbar {
+  box-shadow: var(--ms-shadow-sm);
+}
+
+/* Helpers: colored left border for product cards */
+.product-card.border-left-success { border-left: 5px solid var(--bs-success); }
+.product-card.border-left-warning { border-left: 5px solid var(--bs-warning); }
+.product-card.border-left-danger  { border-left: 5px solid var(--bs-danger); }

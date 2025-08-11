@@ -10,7 +10,7 @@ import { salesPersistence } from '@/lib/salesPersistence';
 import CustomerForm from './CustomerForm';
 import TicketPrint from './TicketPrint';
 
-interface SalesFormProps {
+interface SalesWorkspaceProps {
   cashSession: CashSession;
   onSaleRegistered: () => void;
 }
@@ -23,7 +23,7 @@ interface SaleItem {
   applyPromotion: boolean;
 }
 
-const ImprovedSalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) => {
+const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [salesItems, setSalesItems] = useState<SaleItem[]>([]);
@@ -326,8 +326,8 @@ const ImprovedSalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) =>
       </div>
 
       <div className="row">
-        {/* COLUMNA IZQUIERDA - Productos y Carrito */}
-        <div className="col-lg-8">
+        {/* COLUMNA IZQUIERDA - Búsqueda y Productos */}
+        <div className="col-lg-5">
           {/* Búsqueda de Productos */}
           <div className="card border-0 shadow-sm mb-3">
             <div className="card-body py-3">
@@ -359,78 +359,50 @@ const ImprovedSalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) =>
             </div>
           </div>
 
-          {/* Grid de Productos Disponibles */}
+          {/* Lista de Productos Disponibles */}
           {filteredProducts.length > 0 && (
             <div className="card border-0 shadow-sm mb-3">
               <div className="card-header bg-light border-0 py-2">
                 <h6 className="mb-0 text-primary">📦 Productos Disponibles ({filteredProducts.length})</h6>
               </div>
-              <div className="card-body p-3">
-                <div className="row g-2">
-                  {filteredProducts.slice(0, 8).map(product => (
-                    <div key={product.id} className="col-md-6 col-lg-3">
-                      <div 
-                        className="card h-100 border-0 shadow-sm product-card" 
-                        style={{ 
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          borderLeft: `5px solid ${
-                            product.stock > 5 ? '#28a745' : 
-                            product.stock > 2 ? '#ffc107' : '#dc3545'
-                          }`,
-                          minHeight: '120px'
-                        }}
-                        onClick={() => addProductToSale(product)}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'translateY(-3px)';
-                          e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'translateY(0)';
-                          e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-                        }}
-                      >
-                        <div className="card-body p-3 d-flex flex-column">
-                          <div className="d-flex justify-content-between align-items-start mb-2">
-                            <div className="flex-grow-1">
-                              <h6 className="card-title mb-1 fw-bold" style={{ fontSize: '15px', lineHeight: '1.2' }}>
-                                {product.name.length > 25 ? product.name.substring(0, 25) + '...' : product.name}
-                              </h6>
-                              <p className="card-text text-muted mb-2" style={{ fontSize: '13px' }}>
-                                <strong>{product.brand}</strong>
-                                {product.color && <span className="ms-1">• {product.color}</span>}
-                              </p>
-                            </div>
-                            <div className="text-center ms-2">
-                              <Plus size={24} className="text-primary" style={{ 
-                                backgroundColor: '#e3f2fd', 
-                                borderRadius: '50%', 
-                                padding: '4px'
-                              }} />
-                            </div>
-                          </div>
-                          <div className="mt-auto">
-                            <div className="d-flex justify-content-between align-items-center">
-                              <span className="text-success fw-bold" style={{ fontSize: '16px' }}>
-                                ${product.price.toLocaleString()}
-                              </span>
-                              <span className={`badge ${
-                                product.stock > 5 ? 'bg-success' : 
-                                product.stock > 2 ? 'bg-warning text-dark' : 'bg-danger'
-                              }`} style={{ fontSize: '11px' }}>
-                                {product.stock} unid.
-                              </span>
-                            </div>
-                          </div>
+              <div className="card-body p-0">
+                <div className="list-group list-group-flush">
+                  {filteredProducts.slice(0, 20).map(product => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      className="list-group-item list-group-item-action d-flex align-items-center justify-content-between"
+                      onClick={() => addProductToSale(product)}
+                    >
+                      <div className="me-3 text-start">
+                        <div className="fw-bold" style={{ fontSize: '15px' }}>
+                          {product.name}
                         </div>
+                        <small className="text-muted">
+                          <strong>{product.brand}</strong>
+                          {product.color && <span className="ms-1">• {product.color}</span>}
+                        </small>
                       </div>
-                    </div>
+                      <div className="text-end" style={{ minWidth: '140px' }}>
+                        <div className="text-success fw-bold">${product.price.toLocaleString()}</div>
+                        <span className={`badge ${
+                          product.stock > 5 ? 'bg-success' :
+                          product.stock > 2 ? 'bg-warning text-dark' : 'bg-danger'
+                        }`}>
+                          {product.stock} unid.
+                        </span>
+                      </div>
+                    </button>
                   ))}
                 </div>
               </div>
             </div>
           )}
 
+        </div>
+
+        {/* COLUMNA CENTRO - Carrito */}
+        <div className="col-lg-5">
           {/* Carrito de Compras */}
           {salesItems.length > 0 && (
             <div className="card border-0 shadow-sm">
@@ -572,82 +544,18 @@ const ImprovedSalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) =>
             </div>
           )}
 
-          {/* Botones de Acción */}
-          {salesItems.length > 0 && (
-            <div className="mt-4">
-              <div className="row g-3">
-                <div className="col-md-8">
-                  <button
-                    className="btn btn-success btn-lg w-100"
-                    onClick={handleProcessSale}
-                    disabled={isLoading}
-                    style={{ height: '60px', fontSize: '18px' }}
-                  >
-                    {isLoading ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" />
-                        Procesando venta...
-                      </>
-                    ) : (
-                      <>
-                        <Receipt size={24} className="me-2" />
-                        💰 PROCESAR VENTA - ${calculateTotal().toLocaleString()}
-                      </>
-                    )}
-                  </button>
-                </div>
-                <div className="col-md-4">
-                  <button
-                    className="btn btn-info btn-lg w-100"
-                    onClick={() => {
-                      if (selectedCustomer && salesItems.length > 0) {
-                        // Simular datos del ticket para vista previa
-                        const mockTicketData = {
-                          ticket_number: `PREV-${Date.now()}`,
-                          customer: selectedCustomer,
-                          sale_items: salesItems.map(item => ({
-                            product_name: item.product.name,
-                            brand: item.product.brand,
-                            quantity: item.quantity,
-                            unit_price: item.unitPrice,
-                            total_amount: calculateItemSubtotal(item),
-                            unit_price_without_iva: Math.round(item.unitPrice / 1.21),
-                            subtotal_without_iva: Math.round(calculateItemSubtotal(item) / 1.21)
-                          })),
-                          subtotal: calculateSubtotal(),
-                          discount: calculatePromotionDiscount(),
-                          total: calculateTotal(),
-                          iva_amount: Math.round(calculateTotal() - (calculateTotal() / 1.21)),
-                          total_without_iva: Math.round(calculateTotal() / 1.21),
-                          vendor_name: cashSession.vendor?.name || 'Vendedor',
-                          sale_date: new Date().toISOString()
-                        };
-                        setTicketData(mockTicketData);
-                        setShowTicket(true);
-                      } else {
-                        alert('Debe agregar productos y seleccionar un cliente para ver el ticket');
-                      }
-                    }}
-                    style={{ height: '60px', fontSize: '16px' }}
-                  >
-                    <FileText size={20} className="me-2" />
-                    🗺️ Vista Previa
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
+        
           {error && (
             <div className="alert alert-danger mt-3 border-0 shadow-sm">
               <AlertCircle size={20} className="me-2" />
               {error}
             </div>
           )}
+
         </div>
 
-        {/* COLUMNA DERECHA - Cliente y Ventas Recientes */}
-        <div className="col-lg-4">
+        {/* COLUMNA DERECHA - Cliente, Ventas Recientes y Acciones */}
+        <div className="col-lg-2">
           {/* Panel de Cliente Compacto */}
           <div className="card border-0 shadow-sm mb-3">
             <div className="card-header bg-info text-white border-0 py-2">
@@ -777,6 +685,29 @@ const ImprovedSalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) =>
               )}
             </div>
           </div>
+
+          {/* Acciones de Venta */}
+          <div className="card border-0 shadow-sm mt-3">
+            <div className="card-body p-2">
+              <div className="d-grid gap-2">
+                <button
+                  className="btn btn-primary"
+                  onClick={handleProcessSale}
+                  disabled={isLoading || salesItems.length === 0}
+                  title={salesItems.length === 0 ? 'Agrega productos al carrito' : 'Registrar la venta'}
+                >
+                  {isLoading ? 'Procesando…' : `Registrar Venta (${calculateTotal().toLocaleString()})`}
+                </button>
+                <button
+                  className="btn btn-outline-secondary"
+                  onClick={clearSale}
+                  disabled={isLoading || salesItems.length === 0}
+                >
+                  Vaciar Carrito
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -807,40 +738,41 @@ const ImprovedSalesForm = ({ cashSession, onSaleRegistered }: SalesFormProps) =>
         </div>
       )}
 
-      {/* Modal de Ticket */}
+      {/* Drawer lateral de Ticket (Offcanvas) */}
       {showTicket && ticketData && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">🧾 Ticket de Venta</h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setShowTicket(false)}
-                ></button>
-              </div>
-              <div className="modal-body">
-                <TicketPrint 
-                  ticketData={ticketData} 
-                  onClose={() => setShowTicket(false)}
-                  onPrint={() => window.print()}
-                />
-              </div>
-              <div className="modal-footer">
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setShowTicket(false)}
-                >
-                  Cerrar
-                </button>
-              </div>
+        <>
+          {/* Backdrop */}
+          <div 
+            className="offcanvas-backdrop fade show" 
+            onClick={() => setShowTicket(false)}
+            style={{ zIndex: 1040 }}
+          />
+          {/* Panel derecho */}
+          <div 
+            className="offcanvas offcanvas-end show" 
+            tabIndex={-1}
+            style={{ visibility: 'visible', width: '520px', zIndex: 1045 }}
+            aria-modal="true" role="dialog"
+          >
+            <div className="offcanvas-header">
+              <h5 className="offcanvas-title">🧾 Ticket de Venta</h5>
+              <button type="button" className="btn-close" aria-label="Close" onClick={() => setShowTicket(false)} />
+            </div>
+            <div className="offcanvas-body">
+              <TicketPrint 
+                ticketData={ticketData}
+                onClose={() => setShowTicket(false)}
+                onPrint={() => window.print()}
+              />
+            </div>
+            <div className="border-top p-3 d-flex justify-content-end">
+              <button className="btn btn-secondary" onClick={() => setShowTicket(false)}>Cerrar</button>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
 };
 
-export default ImprovedSalesForm;
+export default SalesWorkspace;

@@ -1,6 +1,7 @@
   import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import 'bootstrap/dist/css/bootstrap.min.css';
+import './theme.css';
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={inter.className} style={{ backgroundColor: '#f8f9fa' }}>
+      <body className={inter.className}>
         {children}
       </body>
     </html>

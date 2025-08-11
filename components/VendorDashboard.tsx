@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Vendor, CashSession, getActiveCashSession, openCashSession, closeCashSession } from '@/services/vendorService';
 import CashOpeningForm from './CashOpeningForm';
-import ImprovedSalesForm from './ImprovedSalesForm';
+import SalesWorkspace from './SalesWorkspace';
 import CashClosingForm from './CashClosingForm';
 import { DollarSign, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -105,7 +105,7 @@ const VendorDashboard = ({ vendor }: VendorDashboardProps) => {
           <div className="row">
             {/* Panel de Ventas - Ahora ocupa todo el ancho */}
             <div className="col-12 mb-4">
-              <ImprovedSalesForm 
+              <SalesWorkspace 
                 cashSession={cashSession}
                 onSaleRegistered={handleSaleRegistered}
               />

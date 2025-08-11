@@ -15,68 +15,68 @@ const StockPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Header simplificado */}
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <Package className="h-8 w-8 text-blue-600" />
-            <h1 className="text-3xl font-bold text-gray-900">Gestión de Stock</h1>
+    <div className="container-fluid px-0">
+      {/* Encabezado */}
+      <div className="row mb-3">
+        <div className="col-12">
+          <div className="card border-0 shadow-sm">
+            <div className="card-body d-flex align-items-center">
+              <div className="me-3 text-primary" style={{ lineHeight: 0 }}>
+                <Package size={28} />
+              </div>
+              <div>
+                <h1 className="h4 mb-1">Gestión de Stock</h1>
+                <small className="text-muted">Actualiza el inventario cuando lleguen nuevos productos a tu tienda</small>
+              </div>
+            </div>
           </div>
-          <p className="text-gray-600">
-            Actualiza el inventario cuando lleguen nuevos productos a tu tienda
-          </p>
         </div>
+      </div>
 
-        {/* Tabs */}
-        <div className="mb-8">
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
+      {/* Tabs */}
+      <div className="row mb-3">
+        <div className="col-12">
+          <ul className="nav nav-tabs">
+            <li className="nav-item">
               <button
+                className={`nav-link ${activeTab === 'update' ? 'active' : ''}`}
                 onClick={() => setActiveTab('update')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'update'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
               >
-                <div className="flex items-center gap-2">
-                  <Package className="h-4 w-4" />
-                  Actualizar Stock
-                </div>
+                <span className="me-2"><Package size={16} /></span>
+                Actualizar Stock
               </button>
+            </li>
+            <li className="nav-item">
               <button
+                className={`nav-link ${activeTab === 'view' ? 'active' : ''}`}
                 onClick={() => setActiveTab('view')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'view'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
               >
-                <div className="flex items-center gap-2">
-                  <List className="h-4 w-4" />
-                  Ver Inventario
-                </div>
+                <span className="me-2"><List size={16} /></span>
+                Ver Inventario
               </button>
-            </nav>
-          </div>
+            </li>
+          </ul>
         </div>
+      </div>
 
-        {/* Content */}
-        <div className="space-y-8">
+      {/* Contenido */}
+      <div className="row">
+        <div className="col-12">
           {activeTab === 'update' && (
-            <StockUpdateForm onStockUpdate={handleStockUpdate} />
+            <div className="card border-0 shadow-sm">
+              <div className="card-body">
+                <StockUpdateForm onStockUpdate={handleStockUpdate} />
+              </div>
+            </div>
           )}
 
           {activeTab === 'view' && (
-            <div>
-              <div className="bg-white rounded-lg shadow">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <h2 className="text-lg font-medium text-gray-900">Inventario Actual</h2>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Vista completa de todos los productos en stock
-                  </p>
-                </div>
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-light border-0 py-2">
+                <h6 className="mb-0 text-primary">Inventario Actual</h6>
+                <small className="text-muted">Vista completa de todos los productos en stock</small>
+              </div>
+              <div className="card-body p-0">
                 <ProductTable key={refreshKey} onProductsChange={handleStockUpdate} />
               </div>
             </div>
