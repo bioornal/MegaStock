@@ -8,9 +8,22 @@ export async function middleware(request: NextRequest) {
     },
   })
 
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // Fallback defensivo: si faltan variables de entorno en Edge/Netlify, no romper
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    const { pathname } = request.nextUrl
+    // Permitir recursos públicos mínimos; redirigir el resto a login
+    if (pathname !== '/login' && !pathname.startsWith('/_next') && !pathname.startsWith('/api')) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+    return response
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
     {
       cookies: {
         get(name: string) {
@@ -54,7 +67,13 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser();
+  let user: any = null
+  try {
+    const result = await supabase.auth.getUser()
+    user = result.data.user
+  } catch {
+    // Si falla en Edge, usar fallback a login en rutas protegidas más abajo
+  }
   const { pathname } = request.nextUrl;
 
   // Redirect to login if no session and not on the login page
