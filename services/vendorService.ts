@@ -195,15 +195,22 @@ export const searchTickets = async (
 export const createTicketWithItems = async (args: {
   cash_session_id: number;
   customer_id: number | null;
-  payment_method: 'cash' | 'card' | 'qr' | 'transfer';
   items: { product_id: number; quantity: number; unit_price: number; total_amount: number }[];
+  payments?: { payment_method: 'cash' | 'card' | 'qr' | 'transfer'; amount: number }[];
+  // Deprecated: kept for backward compatibility. If provided and payments is undefined, backend will insert a single payment.
+  payment_method?: 'cash' | 'card' | 'qr' | 'transfer';
 }): Promise<{ ticket: Ticket; items: any[] }> => {
-  const payload = {
+  const payload: any = {
     p_cash_session_id: args.cash_session_id,
     p_customer_id: args.customer_id ?? 0,
-    p_payment_method: args.payment_method,
     p_items: args.items as any
   };
+  if (args.payments && args.payments.length > 0) {
+    payload.p_payments = args.payments;
+  } else if (args.payment_method) {
+    // fallback single payment for legacy flows
+    payload.p_payments = [{ payment_method: args.payment_method, amount: args.items.reduce((s, it) => s + it.total_amount, 0) }];
+  }
 
   const { data, error } = await supabase.rpc('create_ticket_with_items', payload);
   if (error) {

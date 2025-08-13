@@ -19,9 +19,11 @@ interface SaleItem {
   product: Product;
   quantity: number;
   unitPrice: number;
-  paymentMethod: 'cash' | 'card' | 'qr' | 'transfer';
   applyPromotion: boolean;
 }
+
+type PaymentMethod = 'cash' | 'card' | 'qr' | 'transfer';
+interface PaymentSplit { method: PaymentMethod; amount: number }
 
 const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -37,6 +39,7 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [showTicket, setShowTicket] = useState(false);
   const [ticketData, setTicketData] = useState<any>(null);
+  const [payments, setPayments] = useState<PaymentSplit[]>([{ method: 'cash', amount: 0 }]);
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   useEffect(() => {
@@ -88,7 +91,6 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
         productId: item.product.id,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
-        paymentMethod: item.paymentMethod,
         applyPromotion: item.applyPromotion
       }));
       
@@ -110,7 +112,6 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
         product,
         quantity: 1,
         unitPrice: product.price,
-        paymentMethod: 'cash',
         applyPromotion: false
       };
       setSalesItems([...salesItems, newItem]);
@@ -130,10 +131,48 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
     setSalesItems(newItems);
   };
 
-  const handlePaymentMethodChange = (index: number, method: 'cash' | 'card' | 'qr' | 'transfer') => {
-    const newItems = [...salesItems];
-    newItems[index].paymentMethod = method;
-    setSalesItems(newItems);
+  // Cálculo de subtotal por ítem (debe declararse antes de ser usada)
+  function calculateItemSubtotal(item: SaleItem): number {
+    const baseSubtotal = item.quantity * item.unitPrice;
+    if (item.applyPromotion && item.quantity >= 2) {
+      const freeItems = Math.floor(item.quantity / 2);
+      return baseSubtotal - (freeItems * item.unitPrice);
+    }
+    return baseSubtotal;
+  }
+
+  // Ticket-level payments handling
+  const totalAmount = (): number => salesItems.reduce((sum, item) => sum + calculateItemSubtotal(item), 0);
+  const paymentsTotal = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const remainingToAssign = Math.max(0, totalAmount() - paymentsTotal);
+
+  const setSinglePaymentCoveringTotal = () => {
+    setPayments([{ method: 'cash', amount: totalAmount() }]);
+  };
+
+  useEffect(() => {
+    // Auto-adjust first payment to cover total if only one line exists
+    if (payments.length === 1) {
+      setPayments([{ ...payments[0], amount: totalAmount() }]);
+    }
+  }, [salesItems]);
+
+  const addPaymentLine = (method: PaymentMethod) => {
+    const remaining = totalAmount() - paymentsTotal;
+    const amount = Math.max(0, remaining);
+    setPayments(prev => [...prev, { method, amount }]);
+  };
+
+  const updatePaymentMethod = (idx: number, method: PaymentMethod) => {
+    setPayments(prev => prev.map((p, i) => i === idx ? { ...p, method } : p));
+  };
+
+  const updatePaymentAmount = (idx: number, amount: number) => {
+    setPayments(prev => prev.map((p, i) => i === idx ? { ...p, amount: Math.max(0, amount) } : p));
+  };
+
+  const removePaymentLine = (idx: number) => {
+    setPayments(prev => prev.filter((_, i) => i !== idx));
   };
 
   const handlePromotionChange = (index: number, apply: boolean) => {
@@ -152,15 +191,6 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
     setSelectedCustomer(null);
     setError('');
     salesPersistence.clearDraft(cashSession.vendor_id, cashSession.id);
-  };
-
-  const calculateItemSubtotal = (item: SaleItem): number => {
-    const baseSubtotal = item.quantity * item.unitPrice;
-    if (item.applyPromotion && item.quantity >= 2) {
-      const freeItems = Math.floor(item.quantity / 2);
-      return baseSubtotal - (freeItems * item.unitPrice);
-    }
-    return baseSubtotal;
   };
 
   const calculateSubtotal = (): number => {
@@ -188,10 +218,22 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
     setError('');
 
     try {
-      // Validar método de pago: debe ser único para todo el ticket
-      const methods = Array.from(new Set(salesItems.map(i => i.paymentMethod)));
-      if (methods.length > 1) {
-        throw new Error('Todos los ítems deben tener el mismo método de pago para un solo ticket.');
+      // Validar pagos divididos a nivel ticket
+      if (payments.length === 0) {
+        setSinglePaymentCoveringTotal();
+      }
+      const total = totalAmount();
+      const sum = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+      if (Math.round(sum) !== Math.round(total)) {
+        throw new Error('La suma de los pagos no coincide con el total del ticket.');
+      }
+      for (const p of payments) {
+        if (!['cash','card','qr','transfer'].includes(p.method)) {
+          throw new Error('Método de pago inválido.');
+        }
+        if (p.amount < 0) {
+          throw new Error('Los montos de pago no pueden ser negativos.');
+        }
       }
 
       // Construir items para la RPC
@@ -206,8 +248,8 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
       const result = await createTicketWithItems({
         cash_session_id: cashSession.id,
         customer_id: selectedCustomer?.id || null,
-        payment_method: methods[0],
         items: itemsPayload,
+        payments: payments.map(p => ({ payment_method: p.method, amount: p.amount })) as any,
       });
 
       // Cargar detalle completo para impresión/visualización
@@ -416,7 +458,7 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
                     className="btn btn-outline-light btn-sm"
                     onClick={clearSale}
                   >
-                    <Trash2 size={16} className="me-1" />
+                    <Trash2 size={16} />
                     Limpiar Todo
                   </button>
                 </div>
@@ -430,7 +472,6 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
                         <th className="border-0 text-center">Cantidad</th>
                         <th className="border-0">Precio Unit.</th>
                         <th className="border-0 text-center">2x1</th>
-                        <th className="border-0">Pago</th>
                         <th className="border-0 text-end">Subtotal</th>
                         <th className="border-0 text-center">Acción</th>
                       </tr>
@@ -487,18 +528,6 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
                               />
                             </div>
                           </td>
-                          <td className="py-3">
-                            <select
-                              className="form-select form-select-sm"
-                              value={item.paymentMethod}
-                              onChange={(e) => handlePaymentMethodChange(index, e.target.value as any)}
-                            >
-                              <option value="cash">💵 Efectivo</option>
-                              <option value="card">💳 Tarjeta</option>
-                              <option value="qr">📱 QR</option>
-                              <option value="transfer">🏦 Transferencia</option>
-                            </select>
-                          </td>
                           <td className="py-3 text-end">
                             <strong className="text-success fs-6">${calculateItemSubtotal(item).toLocaleString()}</strong>
                           </td>
@@ -534,6 +563,53 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
                           <div className="d-flex justify-content-between">
                             <strong className="fs-5">TOTAL:</strong>
                             <strong className="text-primary fs-4">${calculateTotal().toLocaleString()}</strong>
+                          </div>
+                          {/* Split de Pagos a nivel Ticket */}
+                          <div className="mt-3 p-2 border rounded">
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <strong>Pagos</strong>
+                              <small className={paymentsTotal === totalAmount() ? 'text-success' : 'text-danger'}>
+                                Asignado: ${paymentsTotal.toLocaleString()} / ${totalAmount().toLocaleString()}
+                              </small>
+                            </div>
+                            {payments.map((p, idx) => (
+                              <div key={idx} className="d-flex align-items-center mb-2 gap-2">
+                                <select
+                                  className="form-select form-select-sm"
+                                  style={{ maxWidth: 160 }}
+                                  value={p.method}
+                                  onChange={(e) => updatePaymentMethod(idx, e.target.value as PaymentMethod)}
+                                >
+                                  <option value="cash">💵 Efectivo</option>
+                                  <option value="card">💳 Tarjeta</option>
+                                  <option value="qr">📱 QR</option>
+                                  <option value="transfer">🏦 Transferencia</option>
+                                </select>
+                                <input
+                                  type="number"
+                                  className="form-control form-control-sm"
+                                  style={{ maxWidth: 140 }}
+                                  value={p.amount}
+                                  min={0}
+                                  step={100}
+                                  onChange={(e) => updatePaymentAmount(idx, parseInt(e.target.value) || 0)}
+                                />
+                                {payments.length > 1 && (
+                                  <button className="btn btn-outline-danger btn-sm" onClick={() => removePaymentLine(idx)}>
+                                    <X size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            <div className="d-flex gap-2 mt-2">
+                              <button className="btn btn-outline-success btn-sm" onClick={() => addPaymentLine('cash')}>+ Efectivo</button>
+                              <button className="btn btn-outline-primary btn-sm" onClick={() => addPaymentLine('card')}>+ Tarjeta</button>
+                              <button className="btn btn-outline-dark btn-sm" onClick={() => addPaymentLine('transfer')}>+ Transferencia</button>
+                              <button className="btn btn-outline-secondary btn-sm" onClick={() => addPaymentLine('qr')}>+ QR</button>
+                            </div>
+                            {paymentsTotal !== totalAmount() && (
+                              <div className="mt-2 text-danger small">La suma de los pagos debe coincidir con el total.</div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -623,9 +699,7 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
                           ${ticket.total_amount.toLocaleString()}
                         </strong>
                         <span className="ms-2" style={{ fontSize: '12px' }}>
-                          {ticket.payment_method === 'cash' ? '💵' : 
-                           ticket.payment_method === 'card' ? '💳' : 
-                           ticket.payment_method === 'qr' ? '📱' : '🏦'}
+                          🧾
                         </span>
                       </div>
                     </div>

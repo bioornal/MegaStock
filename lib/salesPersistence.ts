@@ -5,7 +5,6 @@ interface SaleItemDraft {
   productId: number;
   productName: string;
   quantity: number;
-  paymentMethod: 'cash' | 'card' | 'qr' | 'transfer';
   unitPrice: number;
   timestamp: number;
 }
@@ -38,14 +37,18 @@ export class SalesPersistence {
       const draft: VendorSalesDraft = {
         vendorId,
         cashSessionId,
-        salesItems: salesItems.map(item => ({
-          productId: item.product.id,
-          productName: item.product.name,
-          quantity: item.quantity,
-          paymentMethod: item.paymentMethod,
-          unitPrice: item.product.price,
-          timestamp: Date.now()
-        })),
+        salesItems: salesItems.map(item => {
+          const productId = item.product?.id ?? item.productId;
+          const productName = item.product?.name ?? item.productName;
+          const unitPrice = item.unitPrice ?? item.product?.price ?? 0;
+          return {
+            productId,
+            productName,
+            quantity: item.quantity,
+            unitPrice,
+            timestamp: Date.now()
+          };
+        }),
         lastUpdated: Date.now()
       };
 
@@ -188,7 +191,6 @@ export class SalesPersistence {
           product,
           quantity: draftItem.quantity,
           unitPrice: draftItem.unitPrice,
-          paymentMethod: draftItem.paymentMethod,
           applyPromotion: false
         });
       }

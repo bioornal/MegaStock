@@ -7,7 +7,9 @@ create table if not exists public.tickets (
   cash_session_id bigint not null references public.cash_sessions(id) on delete restrict,
   customer_id bigint null references public.customers(id) on delete set null,
   ticket_number varchar(50) not null unique,
-  payment_method varchar(20) not null check (payment_method in ('cash','card','qr','transfer')),
+  -- Deprecated: single payment_method per ticket (kept for backward compatibility)
+  -- Now nullable since we use ticket_payments table for multiple payment methods
+  payment_method varchar(20) null check (payment_method is null or payment_method in ('cash','card','qr','transfer')),
   subtotal numeric(12,2) not null default 0,
   iva_amount numeric(12,2) not null default 0,
   total_amount numeric(12,2) not null default 0,
@@ -30,6 +32,18 @@ create table if not exists public.sale_items (
 
 create index if not exists idx_sale_items_ticket on public.sale_items(ticket_id);
 create index if not exists idx_sale_items_product on public.sale_items(product_id);
+
+-- 2.1) Pagos por ticket (soporte para pagos divididos)
+create table if not exists public.ticket_payments (
+  id bigserial primary key,
+  ticket_id bigint not null references public.tickets(id) on delete cascade,
+  payment_method varchar(20) not null check (payment_method in ('cash','card','qr','transfer')),
+  amount numeric(12,2) not null check (amount >= 0),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_ticket_payments_ticket on public.ticket_payments(ticket_id);
+create index if not exists idx_ticket_payments_method on public.ticket_payments(payment_method);
 
 -- 3) Generador de ticket_number (YYYYMMDD-0001)
 create or replace function public.generate_ticket_number_v2()
@@ -72,8 +86,8 @@ create trigger trigger_set_ticket_number_v2
 create or replace function public.create_ticket_with_items(
   p_cash_session_id bigint,
   p_customer_id bigint,
-  p_payment_method varchar,
-  p_items jsonb
+  p_items jsonb,
+  p_payments jsonb default null
 )
 returns jsonb
 language plpgsql
@@ -91,14 +105,19 @@ declare
   v_item_total numeric(12,2);
   v_ticket jsonb;
   v_items jsonb := '[]'::jsonb;
+  v_payments jsonb := '[]'::jsonb;
+  v_payment_row jsonb;
+  v_payment_method text;
+  v_payment_amount numeric(12,2);
 begin
   if p_items is null or jsonb_array_length(p_items) = 0 then
     raise exception 'Items vacíos';
   end if;
 
   -- Crear ticket (ticket_number por trigger)
-  insert into public.tickets(cash_session_id, customer_id, payment_method)
-  values (p_cash_session_id, nullif(p_customer_id, 0), p_payment_method)
+  -- Nota: payment_method (columna) queda null; los pagos se guardan en ticket_payments
+  insert into public.tickets(cash_session_id, customer_id)
+  values (p_cash_session_id, nullif(p_customer_id, 0))
   returning id into v_ticket_id;
 
   -- Insertar items y actualizar stock
@@ -143,15 +162,57 @@ begin
          total_amount = v_total
    where id = v_ticket_id;
 
-  -- Actualizar totales de la sesión de caja
-  -- (sumamos todas las ventas de esa sesión)
+  -- Insertar pagos (p_payments) si fueron provistos
+  if p_payments is not null and jsonb_typeof(p_payments) = 'array' then
+    for v_payment_row in select * from jsonb_array_elements(p_payments) loop
+      v_payment_method := (v_payment_row->>'payment_method');
+      v_payment_amount := (v_payment_row->>'amount')::numeric;
+
+      if v_payment_method is null or v_payment_method not in ('cash','card','qr','transfer') then
+        raise exception 'Método de pago inválido: %', v_payment_method;
+      end if;
+      if v_payment_amount is null or v_payment_amount < 0 then
+        raise exception 'Monto de pago inválido para método %', v_payment_method;
+      end if;
+
+      insert into public.ticket_payments(ticket_id, payment_method, amount)
+      values (v_ticket_id, v_payment_method, v_payment_amount);
+
+      v_payments := v_payments || jsonb_build_array(
+        jsonb_build_object(
+          'payment_method', v_payment_method,
+          'amount', v_payment_amount
+        )
+      );
+    end loop;
+
+    -- Validación: suma de pagos debe igualar total del ticket
+    if (
+      select coalesce(sum(amount),0)
+      from public.ticket_payments
+      where ticket_id = v_ticket_id
+    ) <> v_total then
+      raise exception 'La suma de los pagos no coincide con el total del ticket';
+    end if;
+  else
+    -- Fallback de compatibilidad: si no hay p_payments y existe pmt antiguo en tickets
+    -- Registrar todo el total como efectivo por defecto si hubiera legacy column (evitar romper flujos antiguos)
+    insert into public.ticket_payments(ticket_id, payment_method, amount)
+    values (v_ticket_id, coalesce((select payment_method from public.tickets where id = v_ticket_id), 'cash'), v_total);
+
+    v_payments := jsonb_build_array(jsonb_build_object('payment_method', coalesce((select payment_method from public.tickets where id = v_ticket_id), 'cash'), 'amount', v_total));
+  end if;
+
+  -- Actualizar totales de la sesión de caja basados en ticket_payments
   with sums as (
-    select coalesce(sum(total_amount),0) as total,
-           coalesce(sum(case when payment_method='cash' then total_amount else 0 end),0) as cash,
-           coalesce(sum(case when payment_method='card' then total_amount else 0 end),0) as card,
-           coalesce(sum(case when payment_method in ('qr','transfer') then total_amount else 0 end),0) as digital
-      from public.tickets
-     where cash_session_id = p_cash_session_id
+    select 
+      coalesce(sum(t.total_amount),0) as total,
+      coalesce(sum(case when tp.payment_method='cash' then tp.amount else 0 end),0) as cash,
+      coalesce(sum(case when tp.payment_method='card' then tp.amount else 0 end),0) as card,
+      coalesce(sum(case when tp.payment_method in ('qr','transfer') then tp.amount else 0 end),0) as digital
+    from public.tickets t
+    left join public.ticket_payments tp on tp.ticket_id = t.id
+    where t.cash_session_id = p_cash_session_id
   )
   update public.cash_sessions cs
      set total_sales = s.total,
@@ -165,7 +226,8 @@ begin
   -- Respuesta
   select jsonb_build_object(
     'ticket', to_jsonb(t),
-    'items', v_items
+    'items', v_items,
+    'payments', v_payments
   ) into v_ticket
   from public.tickets t
   where t.id = v_ticket_id;
