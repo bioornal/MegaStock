@@ -33,10 +33,11 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
               margin: 0;
               padding: 10px;
               font-family: 'Courier New', monospace;
-              font-size: 10px;
-              line-height: 1.2;
+              font-size: 12px;
+              line-height: 1.3;
               color: black;
               background: white;
+              font-weight: bold;
             }
             .ticket {
               width: 80mm;
@@ -44,7 +45,10 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
             }
             .text-center { text-align: center; }
             .text-end { text-align: right; }
-            .fw-bold { font-weight: bold; }
+            .fw-bold { font-weight: 900; }
+            .text-normal { font-weight: bold; }
+            .text-large { font-size: 14px; font-weight: 900; }
+            .text-medium { font-size: 13px; font-weight: bold; }
             .mb-1 { margin-bottom: 2px; }
             .mb-2 { margin-bottom: 4px; }
             .mb-3 { margin-bottom: 6px; }
@@ -148,19 +152,19 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
                   <div className="ticket-content">
                     {/* Encabezado de la empresa */}
                     <div className="text-center mb-3">
-                      <h4 className="mb-1" style={{ fontSize: '16px', fontWeight: 'bold' }}>
+                      <h4 className="mb-1" style={{ fontSize: '18px', fontWeight: '900' }}>
                         Mega Muebles
                       </h4>
-                      <p className="mb-1" style={{ fontSize: '12px', margin: '0' }}>
+                      <p className="mb-1" style={{ fontSize: '14px', margin: '0', fontWeight: 'bold' }}>
                         Especialidades SRL
                       </p>
-                      <p className="mb-1" style={{ fontSize: '10px', margin: '0' }}>
+                      <p className="mb-1" style={{ fontSize: '12px', margin: '0', fontWeight: 'bold' }}>
                         CUIT: 30716690901
                       </p>
-                      <p className="mb-1" style={{ fontSize: '10px', margin: '0' }}>
+                      <p className="mb-1" style={{ fontSize: '12px', margin: '0', fontWeight: 'bold' }}>
                         IB: 
                       </p>
-                      <p className="mb-2" style={{ fontSize: '10px', margin: '0' }}>
+                      <p className="mb-2" style={{ fontSize: '12px', margin: '0', fontWeight: 'bold' }}>
                         Inicio de Act.: 01/01/1990
                       </p>
                     </div>
@@ -170,14 +174,14 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
 
                     {/* Información fiscal */}
                     <div className="text-center mb-2">
-                      <p style={{ fontSize: '10px', margin: '0' }}>
+                      <p style={{ fontSize: '12px', margin: '0', fontWeight: 'bold' }}>
                         Iva Responsable Inscripto
                       </p>
                     </div>
 
                     {/* Información de la factura */}
                     <div className="mb-2">
-                      <div className="row" style={{ fontSize: '10px' }}>
+                      <div className="row" style={{ fontSize: '13px', fontWeight: '900' }}>
                         <div className="col-6">
                           <strong>FACTURA {getInvoiceLetter(ticketData.customer.customer_type)}</strong>
                         </div>
@@ -185,20 +189,20 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
                           <strong>NRO. {ticketData.ticket_number}</strong>
                         </div>
                       </div>
-                      <div className="row" style={{ fontSize: '10px' }}>
+                      <div className="row" style={{ fontSize: '12px', fontWeight: 'bold' }}>
                         <div className="col-6">
-                          CODIGO N° 01
+                          <strong>CODIGO N° 01</strong>
                         </div>
                         <div className="col-6 text-end">
-                          Fecha: {formatDate(ticketData.created_at)}
+                          <strong>Fecha: {formatDate(ticketData.created_at)}</strong>
                         </div>
                       </div>
-                      <div className="row" style={{ fontSize: '10px' }}>
+                      <div className="row" style={{ fontSize: '12px', fontWeight: 'bold' }}>
                         <div className="col-6">
-                          ORIGINAL
+                          <strong>ORIGINAL</strong>
                         </div>
                         <div className="col-6 text-end">
-                          Hora: {formatTime(ticketData.created_at)}
+                          <strong>Hora: {formatTime(ticketData.created_at)}</strong>
                         </div>
                       </div>
                     </div>
@@ -207,30 +211,30 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
                     <div style={{ borderTop: '1px dashed #000', margin: '10px 0' }}></div>
 
                     {/* Datos del cliente */}
-                    <div className="mb-2" style={{ fontSize: '10px' }}>
+                    <div className="mb-2" style={{ fontSize: '12px', fontWeight: 'bold' }}>
                       {ticketData.customer && ticketData.customer.id ? (
                         <>
-                          <p className="mb-1" style={{ fontWeight: 'normal' }}>
-                            {ticketData.customer.name}
+                          <p className="mb-1" style={{ fontWeight: 'bold' }}>
+                            <strong>{ticketData.customer.name}</strong>
                           </p>
-                          <p className="mb-1" style={{ fontWeight: 'normal' }}>
-                            Dir.: {ticketData.customer.address || 'Sin dirección'}
+                          <p className="mb-1" style={{ fontWeight: 'bold' }}>
+                            <strong>Dir.: {ticketData.customer.address || 'Sin dirección'}</strong>
                           </p>
-                          <p className="mb-1" style={{ fontWeight: 'normal' }}>
-                            Loc.: {ticketData.customer.city || 'Sin localidad'}
+                          <p className="mb-1" style={{ fontWeight: 'bold' }}>
+                            <strong>Loc.: {ticketData.customer.city || 'Sin localidad'}</strong>
                           </p>
 
-                          <p className="mb-1" style={{ fontWeight: 'normal' }}>
-                            CUIT: {ticketData.customer.cuit_dni || ''}
+                          <p className="mb-1" style={{ fontWeight: 'bold' }}>
+                            <strong>CUIT: {ticketData.customer.cuit_dni || ''}</strong>
                           </p>
                           {ticketData.customer.customer_type === 'responsable_inscripto' && (
-                            <p className="mb-1" style={{ fontWeight: 'normal' }}>
-                              IVA Responsable Inscripto
+                            <p className="mb-1" style={{ fontWeight: 'bold' }}>
+                              <strong>IVA Responsable Inscripto</strong>
                             </p>
                           )}
                           {ticketData.customer.business_name && (
-                            <p className="mb-1" style={{ fontWeight: 'normal' }}>
-                              Razón Social: {ticketData.customer.business_name}
+                            <p className="mb-1" style={{ fontWeight: 'bold' }}>
+                              <strong>Razón Social: {ticketData.customer.business_name}</strong>
                             </p>
                           )}
                         </>
@@ -256,15 +260,15 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
 
                         return (
                           <div key={index} className="mb-2">
-                            <div style={{ fontSize: '10px' }}>
+                            <div style={{ fontSize: '13px', fontWeight: '900' }}>
                               <strong>{item.product_name}</strong>
                             </div>
-                            <div className="row" style={{ fontSize: '10px' }}>
+                            <div className="row" style={{ fontSize: '12px', fontWeight: 'bold' }}>
                               <div className="col-8">
-                                {item.quantity} x {formatCurrency(item.unit_price_without_iva)}
+                                <strong>{item.quantity} x {formatCurrency(item.unit_price_without_iva)}</strong>
                               </div>
                               <div className="col-4 text-end">
-                                {formatCurrency(item.subtotal_without_iva)}
+                                <strong>{formatCurrency(item.subtotal_without_iva)}</strong>
                               </div>
                             </div>
                           </div>
@@ -276,36 +280,36 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
                     <div style={{ borderTop: '1px dashed #000', margin: '10px 0' }}></div>
 
                     {/* Totales */}
-                    <div className="mb-2" style={{ fontSize: '10px' }}>
+                    <div className="mb-2" style={{ fontSize: '12px', fontWeight: 'bold' }}>
                       <div className="row">
-                        <div className="col-6">Subtotal</div>
-                        <div className="col-2">$</div>
-                        <div className="col-4 text-end">{formatCurrency(ticketData.subtotal)}</div>
+                        <div className="col-6"><strong>Subtotal</strong></div>
+                        <div className="col-2"><strong>$</strong></div>
+                        <div className="col-4 text-end"><strong>{formatCurrency(ticketData.subtotal)}</strong></div>
                       </div>
                       <div className="row">
-                        <div className="col-6">IVA 21%:</div>
-                        <div className="col-2">$</div>
-                        <div className="col-4 text-end">{formatCurrency(ticketData.iva_amount)}</div>
+                        <div className="col-6"><strong>IVA 21%:</strong></div>
+                        <div className="col-2"><strong>$</strong></div>
+                        <div className="col-4 text-end"><strong>{formatCurrency(ticketData.iva_amount)}</strong></div>
                       </div>
                       <div className="row">
-                        <div className="col-6">IVA 10,5%:</div>
-                        <div className="col-2">$</div>
-                        <div className="col-4 text-end">0,00</div>
+                        <div className="col-6"><strong>IVA 10,5%:</strong></div>
+                        <div className="col-2"><strong>$</strong></div>
+                        <div className="col-4 text-end"><strong>0,00</strong></div>
                       </div>
                       <div className="row">
-                        <div className="col-6">Rec.</div>
-                        <div className="col-2">$</div>
-                        <div className="col-4 text-end">0,00</div>
+                        <div className="col-6"><strong>Rec.</strong></div>
+                        <div className="col-2"><strong>$</strong></div>
+                        <div className="col-4 text-end"><strong>0,00</strong></div>
                       </div>
                       <div className="row">
-                        <div className="col-6">Desc.</div>
-                        <div className="col-2">$</div>
-                        <div className="col-4 text-end">0,00</div>
+                        <div className="col-6"><strong>Desc.</strong></div>
+                        <div className="col-2"><strong>$</strong></div>
+                        <div className="col-4 text-end"><strong>0,00</strong></div>
                       </div>
                       <div className="row">
-                        <div className="col-6">Percep.</div>
-                        <div className="col-2">$</div>
-                        <div className="col-4 text-end">0,00</div>
+                        <div className="col-6"><strong>Percep.</strong></div>
+                        <div className="col-2"><strong>$</strong></div>
+                        <div className="col-4 text-end"><strong>0,00</strong></div>
                       </div>
                     </div>
 
@@ -313,19 +317,19 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
                     <div style={{ borderTop: '1px dashed #000', margin: '10px 0' }}></div>
 
                     {/* Total final */}
-                    <div className="text-center mb-3" style={{ fontSize: '12px' }}>
+                    <div className="text-center mb-3" style={{ fontSize: '16px', fontWeight: '900' }}>
                       <strong>TOTAL $ {formatCurrency(ticketData.total)}</strong>
                     </div>
 
                     {/* Información adicional */}
-                    <div className="text-center" style={{ fontSize: '8px' }}>
-                      <p className="mb-1">CAE 75313500689391 Vto. 10/8/2025</p>
+                    <div className="text-center" style={{ fontSize: '10px', fontWeight: 'bold' }}>
+                      <p className="mb-1"><strong>CAE 75313500689391 Vto. 10/8/2025</strong></p>
                       <p className="mb-1">
                         <strong>ARCA</strong>
                       </p>
-                      <p className="mb-1">Comprobante Autorizado</p>
-                      <p className="mb-1">Comprobante generado por www.AdmGlobal.com.ar</p>
-                      <p className="mb-2">
+                      <p className="mb-1"><strong>Comprobante Autorizado</strong></p>
+                      <p className="mb-1"><strong>Comprobante generado por www.AdmGlobal.com.ar</strong></p>
+                      <p className="mb-2" style={{ fontSize: '12px', fontWeight: '900' }}>
                         <strong>Gracias por su compra!</strong>
                       </p>
                     </div>
@@ -343,12 +347,13 @@ const TicketPrint = ({ ticketData, onClose, onPrint }: TicketPrintProps) => {
           width: 80mm;
           margin: 0 auto;
           font-family: 'Courier New', monospace;
-          font-size: 10px;
-          line-height: 1.2;
+          font-size: 12px;
+          line-height: 1.3;
           color: black;
           background: white;
           padding: 10px;
           border: 1px solid #ddd;
+          font-weight: bold;
         }
         
         .ticket-content {
