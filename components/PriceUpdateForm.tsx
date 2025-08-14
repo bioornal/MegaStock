@@ -284,7 +284,8 @@ const PriceUpdateForm: React.FC = () => {
     brandProducts.forEach((product) => {
       const pTokens = tokenize(product.name);
 
-      let best: { score: number; priceName: string; newPrice: number } | null = null;
+      interface Best { score: number; priceName: string; newPrice: number }
+      let best: Best | null = null;
 
       Object.entries(brandData).forEach(([priceName, newPrice]) => {
         const priceTokens = tokenize(priceName);
@@ -313,12 +314,14 @@ const PriceUpdateForm: React.FC = () => {
         }
       });
 
-      if (best) {
+      if (best !== null) {
+        const match = best as Best;
+        const chosenPrice = match.newPrice;
         productToUpdate.set(product.id, {
           productId: product.id,
           productName: product.name,
           currentPrice: product.price,
-          newPrice: best!.newPrice,
+          newPrice: chosenPrice,
           brand: product.brand,
           selected: true,
           manuallyModified: false,
