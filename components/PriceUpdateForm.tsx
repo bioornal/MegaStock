@@ -314,12 +314,11 @@ const PriceUpdateForm: React.FC = () => {
       });
 
       if (best) {
-        const chosen = best; // asegurar tipado no-nulo
         productToUpdate.set(product.id, {
           productId: product.id,
           productName: product.name,
           currentPrice: product.price,
-          newPrice: chosen.newPrice,
+          newPrice: best!.newPrice,
           brand: product.brand,
           selected: true,
           manuallyModified: false,
