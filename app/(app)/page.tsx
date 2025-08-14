@@ -1,13 +1,19 @@
 "use client";
 
+import { useState } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import DashboardStats from '@/components/DashboardStats';
 import ProductTable from '@/components/ProductTable';
 import ViewerDashboard from '@/components/ViewerDashboard';
-import { AlertTriangle } from 'lucide-react';
+import AddProductForm from '@/components/AddProductForm';
+import { AlertTriangle, Plus } from 'lucide-react';
 
 export default function HomePage() {
   const { user, loading, isAdmin, error } = useAuth();
+  // Estado para mostrar/ocultar el formulario de nuevo producto
+  const [showAddForm, setShowAddForm] = useState(false);
+  // Clave para forzar recarga de la tabla al agregar un producto
+  const [reloadKey, setReloadKey] = useState(0);
 
   if (loading) {
     return (
@@ -61,7 +67,31 @@ export default function HomePage() {
         </aside>
         <main className="col-md-9 ms-sm-auto col-lg-10 px-md-4">
           <div className="pt-3">
-            <ProductTable />
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h3 className="mb-0">Inventario</h3>
+              <button
+                className={`btn ${showAddForm ? 'btn-secondary' : 'btn-primary'}`}
+                onClick={() => setShowAddForm((v) => !v)}
+              >
+                {showAddForm ? 'Cancelar' : (
+                  <span className="d-inline-flex align-items-center">
+                    <Plus size={18} className="me-1" /> Nuevo Producto
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {showAddForm && (
+              <AddProductForm
+                onProductAdded={() => {
+                  setShowAddForm(false);
+                  setReloadKey((k) => k + 1); // Fuerza recarga de ProductTable
+                }}
+                onCancel={() => setShowAddForm(false)}
+              />
+            )}
+
+            <ProductTable key={reloadKey} />
           </div>
         </main>
       </div>
