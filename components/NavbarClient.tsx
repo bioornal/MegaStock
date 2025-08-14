@@ -69,6 +69,12 @@ export default function NavbarClient() {
                 </Link>
               </li>
               <li className="nav-item">
+                <Link href="/price-update" className="nav-link d-flex align-items-center">
+                  <span className="me-1">🏷️</span>
+                  Actualizar Precios
+                </Link>
+              </li>
+              <li className="nav-item">
                 <Link href="/admin/users" className="nav-link d-flex align-items-center">
                   <Users className="me-1" size={20} />
                   Gestión Usuarios

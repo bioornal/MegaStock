@@ -149,10 +149,66 @@ export const bulkIncrementStock = async (updates: { productId: number; quantity:
 // Eliminar un producto
 export const deleteProduct = async (productId: number): Promise<void> => {
   const { error } = await supabase.from('products').delete().eq('id', productId);
-
   if (error) {
     console.error('Error deleting product:', error);
     throw error;
   }
 };
 
+// Actualizar precios masivamente
+export const bulkUpdatePrices = async (priceUpdates: { productId: number; newPrice: number }[]): Promise<{ updated: number; errors: any[] }> => {
+  const results = { updated: 0, errors: [] as any[] };
+  
+  for (const update of priceUpdates) {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ price: update.newPrice })
+        .eq('id', update.productId);
+      
+      if (error) {
+        results.errors.push({ productId: update.productId, error });
+      } else {
+        results.updated++;
+      }
+    } catch (err) {
+      results.errors.push({ productId: update.productId, error: err });
+    }
+  }
+  
+  return results;
+};
+
+// Buscar productos por nombre y marca para mapear con precios externos
+export const findProductsByNameAndBrand = async (searchTerms: { name: string; brand: string }[]): Promise<{ found: Product[]; notFound: { name: string; brand: string }[] }> => {
+  const found: Product[] = [];
+  const notFound: { name: string; brand: string }[] = [];
+  
+  for (const term of searchTerms) {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .ilike('name', `%${term.name}%`)
+        .ilike('brand', `%${term.brand}%`);
+      
+      if (error) {
+        console.error('Error searching product:', error);
+        notFound.push(term);
+        continue;
+      }
+      
+      if (data && data.length > 0) {
+        // Si hay múltiples coincidencias, tomar la primera
+        found.push(data[0]);
+      } else {
+        notFound.push(term);
+      }
+    } catch (err) {
+      console.error('Error searching product:', err);
+      notFound.push(term);
+    }
+  }
+  
+  return { found, notFound };
+};
