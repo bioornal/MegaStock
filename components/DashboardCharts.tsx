@@ -16,6 +16,22 @@ import { TrendingUp, Package, DollarSign } from 'lucide-react';
 // Registrar componentes de Chart.js
 ChartJS.register(ArcElement, Tooltip, Legend);
 
+// Genera una paleta de colores dinámica según la cantidad requerida
+const generateColors = (count: number) => {
+  // Paleta base para los primeros colores, luego se generan en HSL
+  const base = [
+    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40',
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'
+  ];
+  if (count <= base.length) return base.slice(0, count);
+  const colors = [...base];
+  for (let i = colors.length; i < count; i++) {
+    const hue = Math.round((360 / count) * i);
+    colors.push(`hsl(${hue}, 70%, 60%)`);
+  }
+  return colors;
+};
+
 const DashboardCharts = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,21 +88,13 @@ const DashboardCharts = () => {
     });
 
     const sortedBrands = Object.entries(brandCount)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 6); // Top 6 marcas
+      .sort(([,a], [,b]) => b - a); // Mostrar todas las marcas
 
     return {
       labels: sortedBrands.map(([brand]) => brand),
       datasets: [{
         data: sortedBrands.map(([, count]) => count),
-        backgroundColor: [
-          '#FF6384',
-          '#36A2EB',
-          '#FFCE56',
-          '#4BC0C0',
-          '#9966FF',
-          '#FF9F40'
-        ],
+        backgroundColor: generateColors(sortedBrands.length),
         borderWidth: 2,
         borderColor: '#fff'
       }]
@@ -102,21 +110,13 @@ const DashboardCharts = () => {
     });
 
     const sortedBrands = Object.entries(brandValue)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 6); // Top 6 marcas por valor
+      .sort(([,a], [,b]) => b - a); // Mostrar todas las marcas
 
     return {
       labels: sortedBrands.map(([brand]) => brand),
       datasets: [{
         data: sortedBrands.map(([, value]) => Math.round(value)),
-        backgroundColor: [
-          '#FF6B6B',
-          '#4ECDC4',
-          '#45B7D1',
-          '#96CEB4',
-          '#FFEAA7',
-          '#DDA0DD'
-        ],
+        backgroundColor: generateColors(sortedBrands.length),
         borderWidth: 2,
         borderColor: '#fff'
       }]

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Product, getProducts, updateProduct, deleteProduct } from '@/services/productService';
-import { BRANDS } from '@/lib/constants';
+import { BRANDS } from '@/lib/productOptions';
 import { Edit, Trash2, Check, X, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDebounce, useLocalCache } from '@/lib/hooks';
 
