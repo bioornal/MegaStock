@@ -1,5 +1,8 @@
 'use client';
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 import { useState, useEffect } from 'react';
 import { getAllOrders, searchOrders, OrdersResponse, Order } from '@/services/orderService';
 import { useDebounce } from '@/lib/hooks';

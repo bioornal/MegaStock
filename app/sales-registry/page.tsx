@@ -1,5 +1,8 @@
 'use client';
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 import { useState, useEffect } from 'react';
 import { getAllTickets, searchTickets, TicketResponse, Ticket, getTicketWithItems, getAllSales, searchSales, SalesResponse, Sale } from '@/services/vendorService';
 import { getDefaultCustomer, TicketData, getTicketData } from '@/services/customerService';

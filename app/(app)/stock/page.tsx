@@ -1,5 +1,8 @@
 "use client";
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 import { useState } from 'react';
 import StockUpdateForm from '@/components/StockUpdateForm';
 import ProductTable from '@/components/ProductTable';

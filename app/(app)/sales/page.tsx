@@ -1,5 +1,8 @@
 "use client";
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 import { useState, useEffect } from 'react';
 import { getActiveVendors, Vendor } from '@/services/vendorService';
 import VendorDashboard from '@/components/VendorDashboard';
