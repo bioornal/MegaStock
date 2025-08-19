@@ -76,11 +76,16 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
 
     const searchLower = debouncedSearchTerm.toLowerCase();
     const availableProducts = products.filter(p => p.stock > 0);
-    const filtered = availableProducts.filter(product =>
-      product.name.toLowerCase().includes(searchLower) ||
-      product.brand.toLowerCase().includes(searchLower) ||
-      (product.color && product.color.toLowerCase().includes(searchLower))
-    );
+    const filtered = availableProducts.filter(product => {
+      const name = product.name?.toLowerCase() ?? '';
+      const brand = (product.brand ?? '').toLowerCase();
+      const color = (product.color ?? '').toLowerCase();
+      return (
+        name.includes(searchLower) ||
+        brand.includes(searchLower) ||
+        color.includes(searchLower)
+      );
+    });
     setFilteredProducts(filtered);
   }, [debouncedSearchTerm, products]);
 
