@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, KeyboardEvent } from 'react';
 import { Product, getProducts, updateProduct, deleteProduct } from '@/services/productService';
 import { BRANDS } from '@/lib/productOptions';
 import { Edit, Trash2, Check, X, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -54,6 +54,18 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
       setError('No se pudieron cargar los productos.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+
+  // Manejar Enter/Escape en inputs de edición
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, id: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSave(id);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditingId(null);
     }
   };
 
@@ -240,11 +252,11 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
           <tbody>
             {currentProducts.map(product => (
               <tr key={product.id}>
-                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.name} onChange={(e) => setEditFormData({...editFormData, name: e.target.value})} /> : <strong>{product.name.toUpperCase()}</strong>}</td>
-                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.brand} onChange={(e) => setEditFormData({...editFormData, brand: e.target.value})} /> : product.brand}</td>
-                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.color || ''} onChange={(e) => setEditFormData({...editFormData, color: e.target.value})} /> : (product.color || '-')}</td>
-                <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.stock} onChange={(e) => setEditFormData({...editFormData, stock: parseInt(e.target.value)})} /> : product.stock}</td>
-                <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: parseFloat(e.target.value)})} /> : `$${product.price.toLocaleString('es-CL')}`}</td>
+                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.name} onChange={(e) => setEditFormData({...editFormData, name: e.target.value})} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : <strong>{product.name.toUpperCase()}</strong>}</td>
+                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.brand} onChange={(e) => setEditFormData({...editFormData, brand: e.target.value})} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : product.brand}</td>
+                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.color || ''} onChange={(e) => setEditFormData({...editFormData, color: e.target.value})} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : (product.color || '-')}</td>
+                <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.stock} onChange={(e) => setEditFormData({...editFormData, stock: parseInt(e.target.value)})} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : product.stock}</td>
+                <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: parseFloat(e.target.value)})} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : `$${product.price.toLocaleString('es-CL')}`}</td>
 
                 <td className="text-center">
                   {editingId === product.id ? (
