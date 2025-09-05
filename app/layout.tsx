@@ -2,6 +2,7 @@
 import { Inter } from "next/font/google";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './theme.css';
+import BootstrapClient from "@/components/BootstrapClient";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -17,6 +18,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={inter.className}>
+        <BootstrapClient />
         {children}
       </body>
     </html>

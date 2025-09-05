@@ -16,8 +16,8 @@ export default function ViewerDashboard() {
       try {
         setLoading(true)
         const data = await getProducts()
-        setProducts(data)
-        setFilteredProducts(data)
+        setProducts(data || [])
+        setFilteredProducts(data || [])
       } catch (err) {
         setError('Error al cargar productos')
         console.error(err)
@@ -35,11 +35,17 @@ export default function ViewerDashboard() {
       return
     }
 
-    const filtered = products.filter(product =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.color && product.color.toLowerCase().includes(searchTerm.toLowerCase()))
-    )
+    const term = searchTerm.toLowerCase()
+    const filtered = products.filter(product => {
+      const name = (product.name || '').toLowerCase()
+      const brand = (product.brand || '').toLowerCase()
+      const color = (product.color || '').toLowerCase()
+      return (
+        name.includes(term) ||
+        brand.includes(term) ||
+        color.includes(term)
+      )
+    })
     setFilteredProducts(filtered)
   }, [searchTerm, products])
 
@@ -151,7 +157,9 @@ export default function ViewerDashboard() {
                     </small>
                   </div>
                   <div className="text-end ms-2" style={{ whiteSpace: 'nowrap' }}>
-                    <div className="small fw-semibold mb-1">${product.price.toLocaleString('es-AR')}</div>
+                    <div className="small fw-semibold mb-1">
+                      {typeof product.price === 'number' ? `$${product.price.toLocaleString('es-AR')}` : '-'}
+                    </div>
                     <span className={`badge rounded-pill ${getStockBadge(product.stock)}`}>{product.stock}</span>
                   </div>
                 </div>
@@ -177,3 +185,4 @@ export default function ViewerDashboard() {
     </div>
   )
 }
+
