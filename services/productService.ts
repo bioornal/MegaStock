@@ -183,6 +183,7 @@ export const bulkUpdatePrices = async (priceUpdates: { productId: number; newPri
 export const findProductsByNameAndBrand = async (searchTerms: { name: string; brand: string }[]): Promise<{ found: Product[]; notFound: { name: string; brand: string }[] }> => {
   const found: Product[] = [];
   const notFound: { name: string; brand: string }[] = [];
+  const seenIds = new Set<number>();
   
   for (const term of searchTerms) {
     try {
@@ -199,8 +200,13 @@ export const findProductsByNameAndBrand = async (searchTerms: { name: string; br
       }
       
       if (data && data.length > 0) {
-        // Si hay múltiples coincidencias, tomar la primera
-        found.push(data[0]);
+        // Agregar todas las coincidencias (incluyendo variantes por color), evitando duplicados
+        for (const p of data) {
+          if (!seenIds.has(p.id)) {
+            seenIds.add(p.id);
+            found.push(p as unknown as Product);
+          }
+        }
       } else {
         notFound.push(term);
       }
