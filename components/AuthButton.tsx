@@ -1,6 +1,6 @@
 'use client'
 
-import { User, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { signOut } from '@/lib/actions/auth'
 import { useTransition } from 'react'
@@ -29,11 +29,7 @@ export default function AuthButton() {
 
   return user ? (
     <div className="d-flex align-items-center">
-      <span className="navbar-text me-3 d-flex align-items-center text-white">
-        <User className="me-2" size={20} />
-        {user.email}
-      </span>
-      <button 
+      <button
         onClick={handleSignOut}
         disabled={isPending}
         className="btn btn-outline-danger d-flex align-items-center"

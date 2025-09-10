@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { Home, Package, Plus, ShoppingCart, FileText } from 'lucide-react';
-import AuthButton from './AuthButton';
+import { Package } from 'lucide-react';
 import NavbarClient from './NavbarClient';
 
 export default async function Navbar() {
