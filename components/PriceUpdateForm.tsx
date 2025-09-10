@@ -664,7 +664,7 @@ const PriceUpdateForm: React.FC = () => {
                 </div>
                 <div className="card-body">
                   <div className="mb-3">
-                    <label className="form-label fw-bold">Enlace de Google Sheets (compartido como "Cualquiera con el enlace")</label>
+                    <label className="form-label fw-bold">Enlace de Google Sheets (compartido como &quot;Cualquiera con el enlace&quot;)</label>
                     <input
                       type="url"
                       className="form-control"
