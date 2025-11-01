@@ -7,7 +7,8 @@ export const BRANDS = [
   "San Jose",
   "DJ",
   "Moval",
-  "DOUE"
+  "DOUE",
+  "JUAREZ"
 ];
 
 export const COLORS_BY_BRAND: { [key: string]: string[] } = {
@@ -68,6 +69,19 @@ export const COLORS_BY_BRAND: { [key: string]: string[] } = {
     "Grafite Boucle",
     "Imbuia/Cinza Veludo Borda",
     "Imbuia/Camurça Veludo Borda",
+  ],
+  // Colores predefinidos para JUAREZ
+  JUAREZ: [
+    "Azul",
+    "Naranja",
+    "Amarillo",
+    "Rosa Viejo",
+    "Gris Claro",
+    "Gris Oscuro",
+    "Beige",
+    "Verde Oscuro",
+    "Verde Agua",
+    "Negro",
   ],
   // Agrega aquí más marcas y sus colores si es necesario
 };
