@@ -111,7 +111,7 @@ export function parseCsv(csvText: string): ParsedSheet {
   if (rows.length === 0) return { headers: [], rows: [] };
 
   // Find the most likely header row
-  const headerKeywords = ['articulo', 'artículo', 'producto', 'descripcion', 'descripción', 'modelo', 'unitario', 'precio', 'price', 'valor', 'monto'];
+  const headerKeywords = ['articulo', 'artículo', 'producto', 'descripcion', 'descripción', 'modelo', 'web', 'unitario', 'precio', 'price', 'valor', 'monto'];
   const norm = (s: string) => s
     .replace(/^\uFEFF/, '')
     .normalize('NFD')
@@ -177,7 +177,7 @@ export interface SheetPriceEntry {
 }
 
 // Map parsed sheet to expected price entries by guessing common headers
-// Looks for headers like: brand/marca, name/producto/modelo, price/precio/valor
+// Looks for headers like: brand/marca, name/producto/modelo, price/web/precio/valor/unitario
 export function mapSheetToPrices(sheet: ParsedSheet): { entries: SheetPriceEntry[]; warnings: string[] } {
   const headers = sheet.headers.map(h => h.toLowerCase());
 
@@ -188,12 +188,12 @@ export function mapSheetToPrices(sheet: ParsedSheet): { entries: SheetPriceEntry
 
   const brandHeader = findHeader(['brand', 'marca']);
   const nameHeader = findHeader(['name', 'producto', 'modelo', 'descripcion', 'descripción']);
-  const priceHeader = findHeader(['price', 'precio', 'valor', 'monto']);
+  const priceHeader = findHeader(['web', 'price', 'precio', 'valor', 'monto', 'unitario']);
 
   const warnings: string[] = [];
   if (!brandHeader) warnings.push('No se encontró columna de Marca (brand/marca).');
   if (!nameHeader) warnings.push('No se encontró columna de Nombre (name/producto/modelo).');
-  if (!priceHeader) warnings.push('No se encontró columna de Precio (price/precio/valor).');
+  if (!priceHeader) warnings.push('No se encontró columna de Precio (web/price/precio/valor/unitario).');
 
   const entries: SheetPriceEntry[] = [];
   for (const row of sheet.rows) {

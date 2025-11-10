@@ -234,8 +234,8 @@ const PriceUpdateForm: React.FC = () => {
       const productHeaderCandidates = ['articulo', 'artículo', 'producto', 'descripcion', 'descripción', 'modelo'];
       const productHeaderIdx = headersLower.findIndex(h => productHeaderCandidates.includes(h));
 
-      // PRECIO: aceptar varios nombres comunes
-      const priceHeaderCandidates = ['unitario', 'precio', 'price', 'valor', 'monto'];
+      // PRECIO: aceptar varios nombres comunes (incluyendo "web" para precios web)
+      const priceHeaderCandidates = ['web', 'unitario', 'precio', 'price', 'valor', 'monto'];
       const unitarioIdx = headersLower.findIndex(h => priceHeaderCandidates.includes(h));
 
       // MARCA opcional inferida por encabezado que coincida con marcas existentes
@@ -245,7 +245,7 @@ const PriceUpdateForm: React.FC = () => {
 
       const warnings: string[] = [];
       if (productHeaderIdx === -1) warnings.push('No se encontró columna de ARTICULO/PRODUCTO en la planilla.');
-      if (unitarioIdx === -1) warnings.push('No se encontró columna de PRECIO (unitario/precio/valor/monto). No se actualizarán productos.');
+      if (unitarioIdx === -1) warnings.push('No se encontró columna de PRECIO (web/unitario/precio/valor/monto). No se actualizarán productos.');
       if (brandHeaderIdx === -1) warnings.push('No se detectó la marca por encabezado; se intentará igualar por nombre sin marca.');
       setSheetWarnings(warnings);
 
@@ -672,7 +672,7 @@ const PriceUpdateForm: React.FC = () => {
                       value={sheetUrl}
                       onChange={(e) => setSheetUrl(e.target.value)}
                     />
-                    <small className="text-muted">Formato recomendado de columnas: Marca | Producto | Precio</small>
+                    <small className="text-muted">Formato recomendado de columnas: Marca | ARTICULO | WEB (o Precio/Unitario/Valor)</small>
                   </div>
                   <button className="btn btn-warning" onClick={analyzeFromSheet} disabled={sheetAnalyzing || loading}>
                     {sheetAnalyzing ? (
