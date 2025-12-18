@@ -63,6 +63,12 @@ export default function NavbarClient() {
                 </Link>
               </li>
               <li className="nav-item">
+                <Link href="/top-selling" className="nav-link d-flex align-items-center">
+                  <span className="me-1">🏆</span>
+                  Más Vendidos
+                </Link>
+              </li>
+              <li className="nav-item">
                 <Link href="/stock" className="nav-link d-flex align-items-center">
                   <Plus className="me-1" size={20} />
                   Actualizar Stock
@@ -98,7 +104,7 @@ export default function NavbarClient() {
           {user && (
             <span className="navbar-text me-3 text-white-50">
               <small>
-                {user.email} 
+                {user.email}
                 <span className={`badge ms-2 ${isAdmin ? 'bg-success' : 'bg-secondary'}`}>
                   {isAdmin ? 'Admin' : 'Viewer'}
                 </span>

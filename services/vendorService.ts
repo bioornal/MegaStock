@@ -309,7 +309,7 @@ export const assignTicketToSales = async (saleIds: number[], ticketNumber: strin
 // Abrir caja diaria
 export const openCashSession = async (vendorId: number, openingCash: number): Promise<CashSession> => {
   const today = new Date().toISOString().split('T')[0];
-  
+
   // Verificar si ya hay una caja abierta hoy para este vendedor
   const { data: existingSession } = await supabase
     .from('cash_sessions')
@@ -355,7 +355,7 @@ export const openCashSession = async (vendorId: number, openingCash: number): Pr
 // Obtener sesión de caja activa del vendedor
 export const getActiveCashSession = async (vendorId: number): Promise<CashSession | null> => {
   const today = new Date().toISOString().split('T')[0];
-  
+
   const { data, error } = await supabase
     .from('cash_sessions')
     .select(`
@@ -525,14 +525,14 @@ export const getMonthlySalesTotal = async (): Promise<{
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1; // getMonth() devuelve 0-11
-  
+
   // Primer día del mes
   const firstDay = `${year}-${month.toString().padStart(2, '0')}-01`;
-  
+
   // Último día del mes
   const lastDay = new Date(year, month, 0).getDate();
   const lastDayFormatted = `${year}-${month.toString().padStart(2, '0')}-${lastDay.toString().padStart(2, '0')}`;
-  
+
   const { data, error } = await supabase
     .from('cash_sessions')
     .select('total_sales, cash_sales, card_sales, digital_sales')
@@ -575,14 +575,14 @@ export const resetMonthlySales = async (): Promise<{ deletedCount: number }> => 
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
-  
+
   // Primer día del mes
   const firstDay = `${year}-${month.toString().padStart(2, '0')}-01`;
-  
+
   // Último día del mes
   const lastDay = new Date(year, month, 0).getDate();
   const lastDayFormatted = `${year}-${month.toString().padStart(2, '0')}-${lastDay.toString().padStart(2, '0')}`;
-  
+
   // Primero eliminar todas las ventas asociadas a las sesiones del mes
   const { data: sessionsToDelete } = await supabase
     .from('cash_sessions')
@@ -592,7 +592,7 @@ export const resetMonthlySales = async (): Promise<{ deletedCount: number }> => 
 
   if (sessionsToDelete && sessionsToDelete.length > 0) {
     const sessionIds = sessionsToDelete.map(s => s.id);
-    
+
     // Eliminar ventas asociadas
     const { error: salesError } = await supabase
       .from('sales')
@@ -719,20 +719,20 @@ export const searchSales = async (
   let filteredData = data || [];
 
   if (filters.vendorName) {
-    filteredData = filteredData.filter(sale => 
+    filteredData = filteredData.filter(sale =>
       sale.cash_session?.vendor?.name?.toLowerCase().includes(filters.vendorName!.toLowerCase())
     );
   }
 
   if (filters.customerName) {
-    filteredData = filteredData.filter(sale => 
+    filteredData = filteredData.filter(sale =>
       sale.customer?.name?.toLowerCase().includes(filters.customerName!.toLowerCase()) ||
       sale.customer?.business_name?.toLowerCase().includes(filters.customerName!.toLowerCase())
     );
   }
 
   if (filters.productName) {
-    filteredData = filteredData.filter(sale => 
+    filteredData = filteredData.filter(sale =>
       sale.product?.name?.toLowerCase().includes(filters.productName!.toLowerCase()) ||
       sale.product?.brand?.toLowerCase().includes(filters.productName!.toLowerCase())
     );
@@ -749,37 +749,67 @@ export const searchSales = async (
   };
 };
 
-// Obtener productos más vendidos
-export const getTopSellingProducts = async (limit: number = 5): Promise<TopSellingProduct[]> => {
-  // Obtener todas las ventas con información del producto
-  const { data: salesData, error } = await supabase
-    .from('sales')
+// Obtener productos más vendidos (desde sale_items - sistema nuevo de tickets)
+export const getTopSellingProducts = async (
+  limit: number = 5,
+  startDate?: string,
+  endDate?: string
+): Promise<TopSellingProduct[]> => {
+  // Primero obtener los IDs de tickets en el rango de fechas (si aplica)
+  let ticketQuery = supabase
+    .from('tickets')
+    .select('id, created_at');
+
+  if (startDate) {
+    ticketQuery = ticketQuery.gte('created_at', startDate);
+  }
+  if (endDate) {
+    ticketQuery = ticketQuery.lte('created_at', endDate);
+  }
+
+  const { data: ticketsData, error: ticketsError } = await ticketQuery;
+
+  if (ticketsError) {
+    console.error('Error fetching tickets for top products:', ticketsError);
+    throw ticketsError;
+  }
+
+  if (!ticketsData || ticketsData.length === 0) {
+    return [];
+  }
+
+  const ticketIds = ticketsData.map(t => t.id);
+
+  // Ahora obtener sale_items de esos tickets
+  const { data: saleItemsData, error: itemsError } = await supabase
+    .from('sale_items')
     .select(`
       product_id,
       quantity,
       total_amount,
       product:products(name, brand, color)
-    `);
+    `)
+    .in('ticket_id', ticketIds);
 
-  if (error) {
-    console.error('Error fetching sales for top products:', error);
-    throw error;
+  if (itemsError) {
+    console.error('Error fetching sale_items for top products:', itemsError);
+    throw itemsError;
   }
 
-  if (!salesData || salesData.length === 0) {
+  if (!saleItemsData || saleItemsData.length === 0) {
     return [];
   }
 
   // Calcular totales generales
-  const totalQuantitySold = salesData.reduce((sum, sale) => sum + sale.quantity, 0);
-  const totalRevenue = salesData.reduce((sum, sale) => sum + sale.total_amount, 0);
+  const totalQuantitySold = saleItemsData.reduce((sum, item) => sum + item.quantity, 0);
+  const totalRevenue = saleItemsData.reduce((sum, item) => sum + item.total_amount, 0);
 
   // Agrupar por producto
-  const productStats = salesData.reduce((acc, sale) => {
-    const productId = sale.product_id;
-    
+  const productStats = saleItemsData.reduce((acc, item) => {
+    const productId = item.product_id;
+
     if (!acc[productId]) {
-      const product = Array.isArray(sale.product) ? sale.product[0] : sale.product;
+      const product = Array.isArray(item.product) ? item.product[0] : item.product;
       acc[productId] = {
         product_id: productId,
         product_name: product?.name || 'Producto desconocido',
@@ -791,19 +821,19 @@ export const getTopSellingProducts = async (limit: number = 5): Promise<TopSelli
         percentage_of_total_sales: 0
       };
     }
-    
-    acc[productId].total_quantity_sold += sale.quantity;
-    acc[productId].total_revenue += sale.total_amount;
+
+    acc[productId].total_quantity_sold += item.quantity;
+    acc[productId].total_revenue += item.total_amount;
     acc[productId].sales_count += 1;
-    
+
     return acc;
   }, {} as Record<number, TopSellingProduct>);
 
   // Convertir a array y calcular porcentajes
   const productsArray = Object.values(productStats).map(product => ({
     ...product,
-    percentage_of_total_sales: totalQuantitySold > 0 
-      ? (product.total_quantity_sold / totalQuantitySold) * 100 
+    percentage_of_total_sales: totalQuantitySold > 0
+      ? (product.total_quantity_sold / totalQuantitySold) * 100
       : 0
   }));
 
