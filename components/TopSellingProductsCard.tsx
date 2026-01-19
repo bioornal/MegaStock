@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { getTopSellingProducts, TopSellingProduct } from '@/services/vendorService';
 import { TrendingUp, Package2, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -40,7 +40,7 @@ const TopSellingProductsCard = () => {
     }
   };
 
-  const fetchTopProducts = async () => {
+  const fetchTopProducts = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -54,15 +54,15 @@ const TopSellingProductsCard = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [timeRange]);
 
   useEffect(() => {
     fetchTopProducts();
-  }, [timeRange]);
+  }, [fetchTopProducts]);
 
   // Get unique brands for filter dropdown
   const uniqueBrands = useMemo(() => {
-    const brands = [...new Set(allProducts.map(p => p.product_brand))].filter(Boolean).sort();
+    const brands = Array.from(new Set(allProducts.map(p => p.product_brand))).filter(Boolean).sort();
     return brands;
   }, [allProducts]);
 

@@ -28,7 +28,7 @@ export default function TopSellingPage() {
                         <h5 className="alert-heading text-primary">ℹ️ Sobre los datos mostrados</h5>
                         <p className="mb-0 small text-muted">
                             Los datos que visualiza provienen directamente de la base de datos de ventas registradas.
-                            Si observa productos que no recuerda haber vendido (como "Almohadas Smart"), estos pueden corresponder a datos históricos o de prueba almacenados anteriormente en el sistema.
+                            Si observa productos que no recuerda haber vendido (como &quot;Almohadas Smart&quot;), estos pueden corresponder a datos históricos o de prueba almacenados anteriormente en el sistema.
                         </p>
                     </div>
                 </div>

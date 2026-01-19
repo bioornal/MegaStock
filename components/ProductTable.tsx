@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, KeyboardEvent } from 'react';
+import { useState, useEffect, useMemo, KeyboardEvent, useCallback } from 'react';
 import { Product, getProducts, updateProduct, deleteProduct } from '@/services/productService';
 import { BRANDS } from '@/lib/productOptions';
 import { Edit, Trash2, Check, X, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -30,7 +30,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   // Carga inicial de productos
-  const loadProducts = async (useCache = true) => {
+  const loadProducts = useCallback(async (useCache = true) => {
     setIsLoading(true);
     try {
       // Si hay cache y se permite usarlo, usar cache primero
@@ -55,7 +55,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [cachedProducts, setCachedProducts]);
 
 
   // Manejar Enter/Escape en inputs de edición
@@ -71,7 +71,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
 
   useEffect(() => {
     loadProducts();
-  }, []);
+  }, [loadProducts]);
 
   // Manejadores de acciones
   const handleEdit = (product: Product) => {

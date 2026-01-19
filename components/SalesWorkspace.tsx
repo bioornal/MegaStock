@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { CashSession, Ticket, getTicketsBySession, createTicketWithItems, getTicketWithItems } from '@/services/vendorService';
 import { getProducts, Product } from '@/services/productService';
 import { Customer, getDefaultCustomer, TicketData } from '@/services/customerService';
@@ -51,10 +51,10 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
         ]);
         setProducts(productsData);
         setRecentTickets(ticketsData);
-        
+
         const pendingDraft = salesPersistence.hasPendingDrafts(cashSession.vendor_id, cashSession.id);
         setHasPendingDraft(pendingDraft);
-        
+
         if (pendingDraft) {
           const summary = salesPersistence.getDraftSummary(cashSession.vendor_id, cashSession.id);
           setDraftSummary(summary);
@@ -98,14 +98,14 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
         unitPrice: item.unitPrice,
         applyPromotion: item.applyPromotion
       }));
-      
+
       salesPersistence.saveDraft(cashSession.vendor_id, cashSession.id, draftItems);
     }
   }, [salesItems, cashSession.vendor_id, cashSession.id]);
 
   const addProductToSale = (product: Product) => {
     const existingIndex = salesItems.findIndex(item => item.product.id === product.id);
-    
+
     if (existingIndex >= 0) {
       const newItems = [...salesItems];
       if (newItems[existingIndex].quantity < product.stock) {
@@ -147,7 +147,7 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
   }
 
   // Ticket-level payments handling
-  const totalAmount = (): number => salesItems.reduce((sum, item) => sum + calculateItemSubtotal(item), 0);
+  const totalAmount = useCallback((): number => salesItems.reduce((sum, item) => sum + calculateItemSubtotal(item), 0), [salesItems]);
   const paymentsTotal = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const remainingToAssign = Math.max(0, totalAmount() - paymentsTotal);
 
@@ -158,9 +158,12 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
   useEffect(() => {
     // Auto-adjust first payment to cover total if only one line exists
     if (payments.length === 1) {
-      setPayments([{ ...payments[0], amount: totalAmount() }]);
+      const currentTotal = totalAmount();
+      if (payments[0].amount !== currentTotal) {
+        setPayments([{ ...payments[0], amount: currentTotal }]);
+      }
     }
-  }, [salesItems]);
+  }, [payments, totalAmount]);
 
   const addPaymentLine = (method: PaymentMethod) => {
     const remaining = totalAmount() - paymentsTotal;
@@ -233,7 +236,7 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
         throw new Error('La suma de los pagos no coincide con el total del ticket.');
       }
       for (const p of payments) {
-        if (!['cash','card','qr','transfer'].includes(p.method)) {
+        if (!['cash', 'card', 'qr', 'transfer'].includes(p.method)) {
           throw new Error('Método de pago inválido.');
         }
         if (p.amount < 0) {
@@ -432,10 +435,9 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
                       </div>
                       <div className="text-end" style={{ minWidth: '140px' }}>
                         <div className="text-success fw-bold">${product.price.toLocaleString()}</div>
-                        <span className={`badge ${
-                          product.stock > 5 ? 'bg-success' :
-                          product.stock > 2 ? 'bg-warning text-dark' : 'bg-danger'
-                        }`}>
+                        <span className={`badge ${product.stock > 5 ? 'bg-success' :
+                            product.stock > 2 ? 'bg-warning text-dark' : 'bg-danger'
+                          }`}>
                           {product.stock} unid.
                         </span>
                       </div>
@@ -487,7 +489,7 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
                           <td className="py-3">
                             <div>
                               <strong className="text-dark">{item.product.name}</strong>
-                              <br/>
+                              <br />
                               <small className="text-muted">{item.product.brand} {item.product.color && `• ${item.product.color}`}</small>
                             </div>
                           </td>
@@ -625,7 +627,7 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
             </div>
           )}
 
-        
+
           {error && (
             <div className="alert alert-danger mt-3 border-0 shadow-sm">
               <AlertCircle size={20} className="me-2" />
@@ -710,9 +712,9 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
                     </div>
                     <div className="d-flex align-items-center">
                       <small className="text-muted me-2" style={{ fontSize: '11px' }}>
-                        {new Date(ticket.created_at).toLocaleTimeString('es-CL', { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
+                        {new Date(ticket.created_at).toLocaleTimeString('es-CL', {
+                          hour: '2-digit',
+                          minute: '2-digit'
                         })}
                       </small>
                       <button
@@ -821,14 +823,14 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
       {showTicket && ticketData && (
         <>
           {/* Backdrop */}
-          <div 
-            className="offcanvas-backdrop fade show" 
+          <div
+            className="offcanvas-backdrop fade show"
             onClick={() => setShowTicket(false)}
             style={{ zIndex: 1040 }}
           />
           {/* Panel derecho */}
-          <div 
-            className="offcanvas offcanvas-end show" 
+          <div
+            className="offcanvas offcanvas-end show"
             tabIndex={-1}
             style={{ visibility: 'visible', width: '520px', zIndex: 1045 }}
             aria-modal="true" role="dialog"
@@ -838,7 +840,7 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
               <button type="button" className="btn-close" aria-label="Close" onClick={() => setShowTicket(false)} />
             </div>
             <div className="offcanvas-body">
-              <TicketPrint 
+              <TicketPrint
                 ticketData={ticketData}
                 onClose={() => setShowTicket(false)}
                 onPrint={() => window.print()}
