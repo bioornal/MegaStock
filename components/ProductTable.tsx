@@ -250,7 +250,6 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
               <th>Marca</th>
               <th>Color</th>
               <th>Stock</th>
-              <th>Costo</th>
               <th>Precio</th>
               <th className="text-center">Acciones</th>
             </tr>
@@ -262,7 +261,6 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
                 <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.brand} onChange={(e) => setEditFormData({ ...editFormData, brand: e.target.value })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : product.brand}</td>
                 <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.color || ''} onChange={(e) => setEditFormData({ ...editFormData, color: e.target.value })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : (product.color || '-')}</td>
                 <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.stock} onChange={(e) => setEditFormData({ ...editFormData, stock: parseInt(e.target.value) })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : product.stock}</td>
-                <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.cost} onChange={(e) => setEditFormData({ ...editFormData, cost: parseFloat(e.target.value) })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : `$${(product.cost || 0).toLocaleString('es-CL')}`}</td>
                 <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.price} onChange={(e) => setEditFormData({ ...editFormData, price: parseFloat(e.target.value) })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : `$${product.price.toLocaleString('es-CL')}`}</td>
 
                 <td className="text-center">

@@ -7,9 +7,11 @@ import Link from 'next/link';
 
 interface InventorySummaryProps {
     products?: Product[];
+    selectedBrand?: string;
+    onBrandClick?: (brand: string) => void;
 }
 
-const InventorySummary: React.FC<InventorySummaryProps> = ({ products: initialProducts }) => {
+const InventorySummary: React.FC<InventorySummaryProps> = ({ products: initialProducts, selectedBrand: externalSelectedBrand, onBrandClick }) => {
     const [products, setProducts] = useState<Product[]>(initialProducts || []);
     const [isLoading, setIsLoading] = useState(!initialProducts);
 
@@ -66,19 +68,27 @@ const InventorySummary: React.FC<InventorySummaryProps> = ({ products: initialPr
                     </div>
                     <div className="col-md-7 col-lg-8">
                         <div className="h-100 d-flex flex-column">
-                            <h6 className="text-secondary mb-3 pb-2 border-bottom">Desglose por Marca</h6>
+                            <h6 className="text-secondary mb-3 pb-2 border-bottom">Desglose por Marca (Click para filtrar)</h6>
                             <div className="flex-grow-1 overflow-auto" style={{ maxHeight: '300px' }}>
                                 <div className="row g-3">
                                     {Object.entries(costByBrand)
                                         .sort(([, a], [, b]) => b - a)
-                                        .map(([brand, total]) => (
-                                            <div key={brand} className="col-sm-6 col-lg-4">
-                                                <div className="d-flex justify-content-between align-items-center p-2 rounded bg-light border-start border-4 border-success h-100">
-                                                    <span className="fw-medium text-truncate me-2" title={brand}>{brand}</span>
-                                                    <span className="fw-bold text-nowrap">${total.toLocaleString('es-CL')}</span>
+                                        .map(([brand, total]) => {
+                                            const isSelected = externalSelectedBrand === brand;
+                                            return (
+                                                <div
+                                                    key={brand}
+                                                    className="col-sm-6 col-lg-4"
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => onBrandClick && onBrandClick(isSelected ? '' : brand)}
+                                                >
+                                                    <div className={`d-flex justify-content-between align-items-center p-2 rounded border-start border-4 h-100 transition-all ${isSelected ? 'bg-success text-white border-success' : 'bg-light border-success hover-shadow'}`}>
+                                                        <span className={`fw-medium text-truncate me-2 ${isSelected ? 'text-white' : ''}`} title={brand}>{brand}</span>
+                                                        <span className={`fw-bold text-nowrap ${isSelected ? 'text-white' : ''}`}>${total.toLocaleString('es-CL')}</span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                 </div>
                             </div>
                         </div>
