@@ -7,6 +7,7 @@ export interface Product {
   color?: string; // Color es opcional para productos existentes
   stock: number;
   price: number;
+  cost: number;
   image: string;
 }
 
@@ -158,14 +159,14 @@ export const deleteProduct = async (productId: number): Promise<void> => {
 // Actualizar precios masivamente
 export const bulkUpdatePrices = async (priceUpdates: { productId: number; newPrice: number }[]): Promise<{ updated: number; errors: any[] }> => {
   const results = { updated: 0, errors: [] as any[] };
-  
+
   for (const update of priceUpdates) {
     try {
       const { error } = await supabase
         .from('products')
         .update({ price: update.newPrice })
         .eq('id', update.productId);
-      
+
       if (error) {
         results.errors.push({ productId: update.productId, error });
       } else {
@@ -175,7 +176,31 @@ export const bulkUpdatePrices = async (priceUpdates: { productId: number; newPri
       results.errors.push({ productId: update.productId, error: err });
     }
   }
-  
+
+  return results;
+};
+
+// Actualizar costos masivamente
+export const bulkUpdateCosts = async (costUpdates: { productId: number; newCost: number }[]): Promise<{ updated: number; errors: any[] }> => {
+  const results = { updated: 0, errors: [] as any[] };
+
+  for (const update of costUpdates) {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ cost: update.newCost })
+        .eq('id', update.productId);
+
+      if (error) {
+        results.errors.push({ productId: update.productId, error });
+      } else {
+        results.updated++;
+      }
+    } catch (err) {
+      results.errors.push({ productId: update.productId, error: err });
+    }
+  }
+
   return results;
 };
 
@@ -184,7 +209,7 @@ export const findProductsByNameAndBrand = async (searchTerms: { name: string; br
   const found: Product[] = [];
   const notFound: { name: string; brand: string }[] = [];
   const seenIds = new Set<number>();
-  
+
   for (const term of searchTerms) {
     try {
       const { data, error } = await supabase
@@ -192,13 +217,13 @@ export const findProductsByNameAndBrand = async (searchTerms: { name: string; br
         .select('*')
         .ilike('name', `%${term.name}%`)
         .ilike('brand', `%${term.brand}%`);
-      
+
       if (error) {
         console.error('Error searching product:', error);
         notFound.push(term);
         continue;
       }
-      
+
       if (data && data.length > 0) {
         // Agregar todas las coincidencias (incluyendo variantes por color), evitando duplicados
         for (const p of data) {
@@ -215,6 +240,6 @@ export const findProductsByNameAndBrand = async (searchTerms: { name: string; br
       notFound.push(term);
     }
   }
-  
+
   return { found, notFound };
 };

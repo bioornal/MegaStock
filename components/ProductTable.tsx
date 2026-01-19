@@ -20,11 +20,11 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
   const [editFormData, setEditFormData] = useState<Partial<Product>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
-  
+
   // Estados para paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(20); // 20 productos por página
-  
+
   // Cache local y debounce
   const [cachedProducts, setCachedProducts] = useLocalCache<Product[]>('megastock_products', []);
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
@@ -37,7 +37,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
       if (useCache && cachedProducts.length > 0) {
         setProducts(cachedProducts);
         setIsLoading(false);
-        
+
         // Cargar en background para actualizar cache
         const freshProducts = await getProducts();
         if (JSON.stringify(freshProducts) !== JSON.stringify(cachedProducts)) {
@@ -117,7 +117,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
       onProductsChange?.();
     }
   };
-  
+
   // Helper para normalizar strings (ignorar tildes y mayúsculas)
   const normalizeText = (text: string | undefined | null): string => {
     if (!text) return '';
@@ -165,7 +165,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
         Mostrando {startIndex + 1}-{Math.min(endIndex, filteredProducts.length)} de {filteredProducts.length} productos
       </div>
       <div className="d-flex align-items-center gap-2">
-        <button 
+        <button
           className="btn btn-outline-secondary btn-sm"
           onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
           disabled={currentPage === 1}
@@ -175,7 +175,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
         <span className="mx-2 small">
           Página {currentPage} de {totalPages}
         </span>
-        <button 
+        <button
           className="btn btn-outline-secondary btn-sm"
           onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
           disabled={currentPage === totalPages}
@@ -186,6 +186,8 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
     </div>
   );
 
+
+
   if (isLoading && products.length === 0) {
     return (
       <div className="text-center">
@@ -195,7 +197,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
       </div>
     );
   }
-  
+
   if (error) return <div className="alert alert-danger">{error}</div>;
 
   return (
@@ -213,11 +215,11 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
             />
           </div>
         </div>
-        <div className="col-md-6">
-          <div className="input-group">
+        <div className="col-md-6 d-flex align-items-center gap-2">
+          <div className="input-group flex-grow-1">
             <span className="input-group-text bg-white"><Filter size={18} /></span>
-            <select 
-              className="form-select" 
+            <select
+              className="form-select"
               value={selectedBrand}
               onChange={(e) => setSelectedBrand(e.target.value)}
             >
@@ -227,6 +229,9 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
               ))}
             </select>
           </div>
+          <a href="/admin/inventory-value" className="btn btn-outline-success border-2 fw-medium d-flex align-items-center gap-1" style={{ whiteSpace: 'nowrap' }}>
+            📊 Costos
+          </a>
         </div>
       </div>
 
@@ -245,6 +250,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
               <th>Marca</th>
               <th>Color</th>
               <th>Stock</th>
+              <th>Costo</th>
               <th>Precio</th>
               <th className="text-center">Acciones</th>
             </tr>
@@ -252,11 +258,12 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
           <tbody>
             {currentProducts.map(product => (
               <tr key={product.id}>
-                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.name} onChange={(e) => setEditFormData({...editFormData, name: e.target.value})} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : <strong>{product.name.toUpperCase()}</strong>}</td>
-                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.brand} onChange={(e) => setEditFormData({...editFormData, brand: e.target.value})} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : product.brand}</td>
-                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.color || ''} onChange={(e) => setEditFormData({...editFormData, color: e.target.value})} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : (product.color || '-')}</td>
-                <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.stock} onChange={(e) => setEditFormData({...editFormData, stock: parseInt(e.target.value)})} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : product.stock}</td>
-                <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: parseFloat(e.target.value)})} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : `$${product.price.toLocaleString('es-CL')}`}</td>
+                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.name} onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : <strong>{product.name.toUpperCase()}</strong>}</td>
+                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.brand} onChange={(e) => setEditFormData({ ...editFormData, brand: e.target.value })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : product.brand}</td>
+                <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.color || ''} onChange={(e) => setEditFormData({ ...editFormData, color: e.target.value })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : (product.color || '-')}</td>
+                <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.stock} onChange={(e) => setEditFormData({ ...editFormData, stock: parseInt(e.target.value) })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : product.stock}</td>
+                <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.cost} onChange={(e) => setEditFormData({ ...editFormData, cost: parseFloat(e.target.value) })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : `$${(product.cost || 0).toLocaleString('es-CL')}`}</td>
+                <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.price} onChange={(e) => setEditFormData({ ...editFormData, price: parseFloat(e.target.value) })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : `$${product.price.toLocaleString('es-CL')}`}</td>
 
                 <td className="text-center">
                   {editingId === product.id ? (
@@ -279,7 +286,7 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
 
       {/* Controles de paginación */}
       {totalPages > 1 && <PaginationControls />}
-      
+
       {/* Mensaje cuando no hay resultados */}
       {filteredProducts.length === 0 && !isLoading && (
         <div className="text-center py-4 text-muted">

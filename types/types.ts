@@ -5,6 +5,7 @@ export interface Product {
   brand: string;
   stock: number;
   price: number;
+  cost: number; // Costo del producto
   color: string;
   size?: string; // Opcional por si no todos los productos lo tienen
   category?: string; // Opcional
