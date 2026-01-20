@@ -62,6 +62,65 @@ export async function fetchGoogleSheetCsv(inputUrl: string, fetcher: typeof fetc
   return text;
 }
 
+// Helper to smartly parse integers relative to currency formats
+// Prioritizes dropping decimals and handling thousands separators correctly
+// Uses heuristic: if separator is followed by exactly 3 digits, it's thousands; otherwise decimal
+export function smartParseInt(val: string | number): number {
+  if (typeof val === 'number') return Math.floor(val);
+  if (!val) return NaN;
+
+  let strVal = val.toString().trim();
+  // Remove currency symbols and other non-numeric chars except . , -
+  strVal = strVal.replace(/[^0-9.,-]/g, '');
+
+  if (!strVal) return NaN;
+
+  let numStr = strVal;
+
+  const lastDotIdx = numStr.lastIndexOf('.');
+  const lastCommaIdx = numStr.lastIndexOf(',');
+
+  if (lastDotIdx > -1 && lastCommaIdx > -1) {
+    // Both separators present: Determine which is decimal based on position (formatting is consistent)
+    if (lastDotIdx > lastCommaIdx) {
+      // ... , ... . XX -> Dot is decimal (US style with comma thousands)
+      // Cut at dot, remove comas
+      numStr = numStr.substring(0, lastDotIdx).replace(/,/g, '');
+    } else {
+      // ... . ... , XX -> Comma is decimal (EU/AR style with dot thousands)
+      // Cut at comma, remove dots
+      numStr = numStr.substring(0, lastCommaIdx).replace(/\./g, '');
+    }
+  } else if (lastDotIdx > -1) {
+    // Only dots
+    const afterDot = numStr.substring(lastDotIdx + 1);
+    // Heuristic: If followed by exactly 3 digits, assume thousands separator.
+    // Unless there's only ONE dot and it's a small number? No, consistency is better.
+    // Exception: If Google Sheets exports "232588.5", it has 1 digit after dot. It is DECIMAL.
+    // If it exports "1.500", it has 3. It is THOUSANDS (usually).
+    if (afterDot.length === 3) {
+      // Likely thousands separator
+      numStr = numStr.replace(/\./g, '');
+    } else {
+      // Likely decimal separator (e.g. .5, .50, .00, .1234)
+      numStr = numStr.substring(0, lastDotIdx);
+    }
+  } else if (lastCommaIdx > -1) {
+    // Only commas
+    const afterComma = numStr.substring(lastCommaIdx + 1);
+    if (afterComma.length === 3) {
+      // Likely thousands (uncommon but possible in some formats)
+      numStr = numStr.replace(/,/g, '');
+    } else {
+      // Likely decimal
+      numStr = numStr.substring(0, lastCommaIdx);
+    }
+  }
+
+  const num = parseInt(numStr, 10);
+  return isNaN(num) ? NaN : num;
+}
+
 // Very small CSV parser (handles quoted values and commas)
 export function parseCsv(csvText: string): ParsedSheet {
   const rows: string[][] = [];
@@ -155,14 +214,15 @@ export function parseCsv(csvText: string): ParsedSheet {
     .map(r => {
       const obj: SheetRow = {};
       headers.forEach((h, idx) => {
-        let val: string | number = (r[idx] ?? '').toString().trim();
-        // Try to parse decimal numbers
-        const normalized = val.replace(/\./g, '').replace(/,/g, '.');
-        const num = Number(normalized);
-        if (!Number.isNaN(num) && /^(?:-?\d+[.,]?\d*)$/.test((r[idx] ?? '').toString().trim())) {
-          val = num;
+        const rawVal = (r[idx] ?? '').toString().trim();
+        // Intentar parsear como número usando lógica inteligente
+        const parsedNum = smartParseInt(rawVal);
+
+        if (!isNaN(parsedNum)) {
+          obj[h] = parsedNum;
+        } else {
+          obj[h] = rawVal;
         }
-        obj[h] = val;
       });
       return obj;
     });
@@ -200,9 +260,13 @@ export function mapSheetToPrices(sheet: ParsedSheet): { entries: SheetPriceEntry
     const brand = String(row[brandHeader ?? ''] ?? '').toString().trim();
     const name = String(row[nameHeader ?? ''] ?? '').toString().trim();
     const rawPrice = row[priceHeader ?? ''];
-    const price = typeof rawPrice === 'number' ? rawPrice : Number(String(rawPrice).replace(/\./g, '').replace(/,/g, '.'));
+
+    // Usar smartParseInt también aquí por seguridad (aunque parseCsv ya debería haberlo hecho)
+    // Esto maneja casos donde rawPrice todavía sea string (ej. formato raro ignorado previamente)
+    const price = smartParseInt(rawPrice as string | number);
+
     if (!brand || !name || Number.isNaN(price)) continue;
-    entries.push({ brand, name, price: Math.round(price) });
+    entries.push({ brand, name, price });
   }
 
   return { entries, warnings };

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getProducts, bulkUpdateCosts, Product, findProductsByNameAndBrand } from '@/services/productService';
-import { fetchGoogleSheetCsv, parseCsv, SheetPriceEntry } from '@/lib/sheets';
+import { getProducts, bulkUpdateCosts, updateProduct, Product, findProductsByNameAndBrand } from '@/services/productService';
+import { fetchGoogleSheetCsv, parseCsv, SheetPriceEntry, smartParseInt } from '@/lib/sheets';
 
 interface CostUpdate {
     productId: number;
@@ -13,6 +13,169 @@ interface CostUpdate {
     selected: boolean;
     manuallyModified: boolean;
 }
+
+// Componente para cada fila de producto no encontrado
+// Permite buscar el producto en la DB y asignar el costo
+interface NotFoundRowProps {
+    entry: SheetPriceEntry;
+    products: Product[];
+    onUpdate: (productName: string, cost: number) => void;
+}
+
+const NotFoundRow: React.FC<NotFoundRowProps> = ({ entry, products, onUpdate }) => {
+    const [editableCost, setEditableCost] = useState(entry.price);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    // Lógica de búsqueda
+    const normalizeForSearch = (s: string) =>
+        (s ?? '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+    const filteredProducts = searchTerm.length >= 2
+        ? products.filter(p => {
+            const normalizedName = normalizeForSearch(p.name);
+            const normalizedSearch = normalizeForSearch(searchTerm);
+            const searchTokens = normalizedSearch.split(' ').filter(Boolean);
+            return searchTokens.every(token => normalizedName.includes(token));
+        }).slice(0, 10)
+        : [];
+
+    const handleSelectProduct = (p: Product) => {
+        setSelectedProduct(p);
+        setSearchTerm(p.name);
+        setShowDropdown(false);
+    };
+
+    const handleSave = async (rename: boolean) => {
+        if (!selectedProduct) {
+            alert('Debes buscar y seleccionar un producto de la base de datos primero.');
+            return;
+        }
+
+        setSaving(true);
+        try {
+            if (rename) {
+                // Actualizar Nombre y Costo
+                // Importamos updateProduct dinámicamente o lo pasamos como prop, 
+                // pero como estamos en el mismo archivo del parent donde se importa, 
+                // mejor usar la función que ya tenemos importada arriba si es posible.
+                // Sin embargo, updateProduct no esta importada en el componente.
+                // Asumiremos que se agrega a imports.
+                await updateProduct(selectedProduct.id, {
+                    name: entry.name, // Renombrar al nombre de la planilla
+                    cost: editableCost
+                });
+                alert(`Producto renombrado a "${entry.name}" y costo actualizado.`);
+            } else {
+                // Solo costo
+                await bulkUpdateCosts([{ productId: selectedProduct.id, newCost: editableCost }]);
+                // alert(`Costo actualizado para ${entry.name}`); // Feedback más sutil
+            }
+            onUpdate(entry.name, editableCost);
+
+        } catch (error) {
+            console.error('Error actualizando:', error);
+            alert('Error al actualizar el producto');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleSave(false);
+        }
+    };
+
+    return (
+        <tr className={selectedProduct ? 'table-success bg-opacity-25' : ''}>
+            <td className="fw-medium text-truncate" style={{ maxWidth: '200px' }} title={entry.name}>
+                {entry.name}
+            </td>
+
+            {/* Buscador de Producto */}
+            <td style={{ minWidth: '250px' }}>
+                <div className="position-relative">
+                    <input
+                        type="text"
+                        className={`form-control form-control-sm ${selectedProduct ? 'border-success text-success fw-bold' : ''}`}
+                        placeholder="Buscar producto en DB..."
+                        value={searchTerm}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setShowDropdown(true);
+                            setSelectedProduct(null); // Resetear selección al cambiar texto
+                        }}
+                        onFocus={() => setShowDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                    />
+                    {showDropdown && filteredProducts.length > 0 && (
+                        <div className="position-absolute bg-white border rounded shadow-sm w-100 mt-1" style={{ zIndex: 1050, maxHeight: '200px', overflowY: 'auto' }}>
+                            {filteredProducts.map(p => (
+                                <div
+                                    key={p.id}
+                                    className="px-2 py-1 cursor-pointer hover-bg-light small border-bottom"
+                                    style={{ cursor: 'pointer' }}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        handleSelectProduct(p);
+                                    }}
+                                >
+                                    <div className="fw-medium">{p.name}</div>
+                                    <div className="text-muted small">{p.brand} | Actual: ${p.cost?.toLocaleString()}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </td>
+
+            {/* Input de Costo */}
+            <td className="text-end" style={{ width: '120px' }}>
+                <input
+                    type="number"
+                    className="form-control form-control-sm text-end fw-bold"
+                    value={editableCost}
+                    onChange={(e) => setEditableCost(Number(e.target.value))}
+                    onKeyDown={handleKeyDown}
+                    disabled={saving}
+                />
+            </td>
+
+            {/* Acciones */}
+            <td style={{ width: '220px' }}>
+                <div className="d-flex gap-1 justify-content-end">
+                    <button
+                        className="btn btn-outline-primary btn-sm"
+                        onClick={() => handleSave(true)}
+                        disabled={saving || !selectedProduct}
+                        title="Cambiar el nombre en DB para que coincida con la planilla (Futuras importaciones automáticas)"
+                    >
+                        {saving ? '...' : '🔗 Renombrar'}
+                    </button>
+                    <button
+                        className="btn btn-success btn-sm"
+                        onClick={() => handleSave(false)}
+                        disabled={saving || !selectedProduct}
+                        title="Solo actualizar costo (Mantener nombre original)"
+                    >
+                        {saving ? '...' : '💾 Costo'}
+                    </button>
+                </div>
+            </td>
+        </tr>
+    );
+};
+
 
 const CostUpdateForm: React.FC = () => {
     const [products, setProducts] = useState<Product[]>([]);
@@ -190,12 +353,12 @@ const CostUpdateForm: React.FC = () => {
             const entries = parsed.rows.map(r => {
                 const name = String(r[productHeader] ?? '').toString().trim();
                 const raw = r[costHeader];
-                // Parsear número, soportando formato con puntos de miles o comas decimales
-                const num = typeof raw === 'number' ? raw : Number(String(raw ?? '').replace(/\./g, '').replace(/,/g, '.'));
+                // Usar smartParseInt para manejar correctamente todos los formatos numéricos
+                const price = smartParseInt(raw as string | number);
                 return {
                     brand: brandFromHeader || '',
                     name,
-                    price: Math.round(Number.isNaN(num) ? 0 : num), // Usamos 'price' en struct intermedio pero es costo
+                    price: Number.isNaN(price) ? 0 : price,
                 };
             }).filter(e => e.name && e.price > 0);
 
@@ -263,13 +426,15 @@ const CostUpdateForm: React.FC = () => {
                     const overlapRatio = eTokens.length > 0 ? overlapCount / eTokens.length : 0;
                     const similar = calculateSimilarity(canon(entry.name), canon(p.name));
 
-                    let minOverlapRatio = 0.45;
+                    // Umbrales más flexibles: mínimo 2 palabras clave coincidentes
+                    // pero permitiendo variaciones en el resto del nombre
                     let minOverlapCount = 2;
-                    let minSimilar = 0.86;
+                    let minSimilar = 0.65; // Reducido para ser más flexible
                     // Moval exception
-                    if (brandKey === canon('Moval')) { minOverlapRatio = 0.30; minOverlapCount = 1; minSimilar = 0.80; }
+                    if (brandKey === canon('Moval')) { minOverlapCount = 1; minSimilar = 0.55; }
 
-                    if (!(overlapRatio >= minOverlapRatio && overlapCount >= minOverlapCount) && similar < minSimilar) continue;
+                    // Pasamos si hay al menos 2 tokens que coinciden O si la similitud es suficiente
+                    if (overlapCount < minOverlapCount && similar < minSimilar) continue;
 
                     const normName = canon(entry.name);
                     const normProd = canon(p.name);
@@ -341,6 +506,8 @@ const CostUpdateForm: React.FC = () => {
                 }
             }
 
+            // Ordenar notFound para mostrar primero los que tienen costo más alto
+            notFound.sort((a, b) => b.price - a.price);
             setSheetNotFound(notFound);
             setSheetUpdates(Array.from(productToUpdate.values()));
 
@@ -514,6 +681,43 @@ const CostUpdateForm: React.FC = () => {
                                     {updateResults.errors.length > 0 && ` Hubo errores en ${updateResults.errors.length}.`}
                                 </div>
                             )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Productos no encontrados - Asociación y Edición Manual */}
+                {sheetNotFound.length > 0 && (
+                    <div className="mt-4 border rounded overflow-hidden border-danger">
+                        <div className="bg-danger bg-opacity-10 p-2 border-bottom d-flex justify-content-between align-items-center">
+                            <div className="fw-bold text-danger px-2">⚠️ {sheetNotFound.length} Productos sin coincidencia</div>
+                            <small className="text-muted">Busca el producto en la DB, selecciona, ajusta costo y guarda</small>
+                        </div>
+                        <div className="table-responsive" style={{ maxHeight: '400px' }}>
+                            <table className="table table-hover table-sm mb-0">
+                                <thead className="table-light sticky-top">
+                                    <tr>
+                                        <th>Nombre en Planilla</th>
+                                        <th style={{ minWidth: '250px' }}>Buscar Producto en DB</th>
+                                        <th className="text-end" style={{ width: '120px' }}>Costo Nuevo</th>
+                                        <th style={{ width: '220px' }}>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sheetNotFound.map((entry, idx) => (
+                                        <NotFoundRow
+                                            key={`nf-${idx}`}
+                                            entry={entry}
+                                            products={products}
+                                            onUpdate={(productName, cost) => {
+                                                // Remover de la lista de no encontrados tras guardar
+                                                setSheetNotFound(prev => prev.filter((_, i) => i !== idx));
+                                                // Recargar productos para reflejar el cambio
+                                                loadProducts();
+                                            }}
+                                        />
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 )}

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getProducts, bulkUpdatePrices, Product, findProductsByNameAndBrand } from '@/services/productService';
-import { fetchGoogleSheetCsv, parseCsv, SheetPriceEntry } from '@/lib/sheets';
+import { fetchGoogleSheetCsv, parseCsv, SheetPriceEntry, smartParseInt } from '@/lib/sheets';
 
 interface PriceUpdate {
   productId: number;
@@ -90,7 +90,7 @@ const PriceUpdateForm: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `cambios-precios-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`;
+    a.download = `cambios-precios-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -152,8 +152,8 @@ const PriceUpdateForm: React.FC = () => {
 
   // Stopwords comunes ES/PT para mejorar el matching por tokens
   const STOPWORDS = new Set<string>([
-    'DE','DEL','LA','EL','LOS','LAS','Y','CON','PARA','EN','AL','A','POR',
-    'DA','DO','DAS','DOS','E','COM','PARA','EM','AO','AOS','PRA','PRAA',
+    'DE', 'DEL', 'LA', 'EL', 'LOS', 'LAS', 'Y', 'CON', 'PARA', 'EN', 'AL', 'A', 'POR',
+    'DA', 'DO', 'DAS', 'DOS', 'E', 'COM', 'PARA', 'EM', 'AO', 'AOS', 'PRA', 'PRAA',
   ]);
   const tokenize = (s: string) =>
     normalizeText(s)
@@ -168,24 +168,24 @@ const PriceUpdateForm: React.FC = () => {
   const calculateSimilarity = (str1: string, str2: string): number => {
     const longer = str1.length > str2.length ? str1 : str2;
     const shorter = str1.length > str2.length ? str2 : str1;
-    
+
     if (longer.length === 0) return 1.0;
-    
+
     const editDistance = levenshteinDistance(longer, shorter);
     return (longer.length - editDistance) / longer.length;
   };
 
   const levenshteinDistance = (str1: string, str2: string): number => {
     const matrix = [];
-    
+
     for (let i = 0; i <= str2.length; i++) {
       matrix[i] = [i];
     }
-    
+
     for (let j = 0; j <= str1.length; j++) {
       matrix[0][j] = j;
     }
-    
+
     for (let i = 1; i <= str2.length; i++) {
       for (let j = 1; j <= str1.length; j++) {
         if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
@@ -199,7 +199,7 @@ const PriceUpdateForm: React.FC = () => {
         }
       }
     }
-    
+
     return matrix[str2.length][str1.length];
   };
 
@@ -261,11 +261,12 @@ const PriceUpdateForm: React.FC = () => {
       const entries = parsed.rows.map(r => {
         const name = String(r[productHeader] ?? '').toString().trim();
         const raw = r[priceHeader];
-        const num = typeof raw === 'number' ? raw : Number(String(raw ?? '').replace(/\./g, '').replace(/,/g, '.'));
+        // Usar smartParseInt para manejar correctamente todos los formatos numéricos
+        const price = smartParseInt(raw as string | number);
         return {
           brand: brandFromHeader || '',
           name,
-          price: Math.round(Number.isNaN(num) ? 0 : num),
+          price: Number.isNaN(price) ? 0 : price,
         };
       }).filter(e => e.name && e.price > 0);
 
@@ -768,8 +769,8 @@ const PriceUpdateForm: React.FC = () => {
                                       diff === 0
                                         ? 'badge bg-secondary'
                                         : diff > 0
-                                        ? 'badge bg-danger'
-                                        : 'badge bg-success'
+                                          ? 'badge bg-danger'
+                                          : 'badge bg-success'
                                     }
                                   >
                                     {diff > 0 ? '+' : ''}{diff.toLocaleString()} (

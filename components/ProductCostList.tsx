@@ -1,14 +1,93 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { getProducts, Product } from '@/services/productService';
-import { BRANDS } from '@/lib/productOptions'; // Assuming BRANDS is exported from here based on previous file reads
-import { Search, Filter } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getProducts, updateProduct, Product } from '@/services/productService';
+import { BRANDS } from '@/lib/productOptions';
+import { Search, Filter, Edit2, Check, X } from 'lucide-react';
 
 interface ProductCostListProps {
     externalSelectedBrand?: string;
     onBrandChange?: (brand: string) => void;
 }
+
+// Componente auxiliar para celda editable
+const EditableCostCell = ({ product, onUpdate }: { product: Product, onUpdate: (id: number, newCost: number) => Promise<void> }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [cost, setCost] = useState(product.cost || 0);
+    const [saving, setSaving] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        setCost(product.cost || 0);
+    }, [product.cost]);
+
+    useEffect(() => {
+        if (isEditing && inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [isEditing]);
+
+    const handleSave = async () => {
+        if (cost === (product.cost || 0)) {
+            setIsEditing(false);
+            return;
+        }
+
+        setSaving(true);
+        try {
+            await onUpdate(product.id, cost);
+            setIsEditing(false);
+        } catch (error) {
+            console.error(error);
+            alert('Error al guardar el costo');
+            setCost(product.cost || 0); // Revertir
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleSave();
+        } else if (e.key === 'Escape') {
+            setCost(product.cost || 0);
+            setIsEditing(false);
+        }
+    };
+
+    if (isEditing) {
+        return (
+            <div className="d-flex align-items-center justify-content-end gap-1">
+                <input
+                    ref={inputRef}
+                    type="number"
+                    className="form-control form-control-sm text-end p-0 px-1"
+                    style={{ width: '80px', height: '24px' }}
+                    value={cost}
+                    onChange={(e) => setCost(Number(e.target.value))}
+                    onBlur={handleSave}
+                    onKeyDown={handleKeyDown}
+                    disabled={saving}
+                />
+                {saving && <span className="spinner-border spinner-border-sm text-primary" style={{ width: '0.8rem', height: '0.8rem' }} />}
+            </div>
+        );
+    }
+
+    return (
+        <div
+            className="d-flex align-items-center justify-content-end cursor-pointer group-hover-visible"
+            onClick={() => setIsEditing(true)}
+            title="Clic para editar"
+            style={{ cursor: 'pointer' }}
+        >
+            <span className={cost === 0 ? 'text-danger fw-bold' : 'text-muted'}>
+                ${cost.toLocaleString('es-CL')}
+            </span>
+            <Edit2 className="ms-2 text-muted opacity-0 group-hover-opacity" size={12} />
+        </div>
+    );
+};
 
 const ProductCostList: React.FC<ProductCostListProps> = ({ externalSelectedBrand, onBrandChange }) => {
     const [products, setProducts] = useState<Product[]>([]);
@@ -32,6 +111,16 @@ const ProductCostList: React.FC<ProductCostListProps> = ({ externalSelectedBrand
         }
     };
 
+    const handleCostUpdate = async (productId: number, newCost: number) => {
+        // Actualizar en DB
+        await updateProduct(productId, { cost: newCost });
+
+        // Actualizar estado local
+        setProducts(prev => prev.map(p =>
+            p.id === productId ? { ...p, cost: newCost } : p
+        ));
+    };
+
     // Helper para normalizar strings (ignorar tildes y mayúsculas)
     const normalizeText = (text: string | undefined | null): string => {
         if (!text) return '';
@@ -42,12 +131,7 @@ const ProductCostList: React.FC<ProductCostListProps> = ({ externalSelectedBrand
     };
 
     const filteredProducts = useMemo(() => {
-        // Si no hay marca seleccionada (aunque por defecto vendrá una), mostrar vacío o todo? 
-        // El usuario dijo "no quiero que se vean todos... ya debe venir filtrado por Moval".
-        // Así que si selectedBrand es vacío, podríamos devolver vacío o todo. 
-        // Pero como setearemos el default en el padre, aquí solo filtramos.
         if (!selectedBrand) return products;
-
         return products.filter(product => normalizeText(product.brand) === normalizeText(selectedBrand));
     }, [products, selectedBrand]);
 
@@ -61,6 +145,11 @@ const ProductCostList: React.FC<ProductCostListProps> = ({ externalSelectedBrand
 
     return (
         <div className="card shadow-sm border-0 mb-4">
+            <style jsx global>{`
+                .group-hover-opacity { opacity: 0; transition: opacity 0.2s; }
+                tr:hover .group-hover-opacity { opacity: 0.5; }
+                tr:hover .group-hover-opacity:hover { opacity: 1; }
+            `}</style>
             <div className="card-header bg-white py-3">
                 <div className="d-flex justify-content-between align-items-center">
                     <h5 className="mb-0 fw-bold text-dark">📋 Detalle de Costos por Producto</h5>
@@ -77,7 +166,7 @@ const ProductCostList: React.FC<ProductCostListProps> = ({ externalSelectedBrand
                             <th>Producto</th>
                             <th>Marca</th>
                             <th className="text-center">Stock</th>
-                            <th className="text-end">Costo Unit.</th>
+                            <th className="text-end" style={{ minWidth: '120px' }}>Costo Unit. ✏️</th>
                             <th className="text-end">Subtotal</th>
                         </tr>
                     </thead>
@@ -89,13 +178,14 @@ const ProductCostList: React.FC<ProductCostListProps> = ({ externalSelectedBrand
                                 <tr key={product.id}>
                                     <td className="text-truncate" style={{ maxWidth: '250px' }} title={product.name}>{product.name}</td>
                                     <td className="text-muted small">{product.brand}</td>
-                                    <td className="text-center">{product.stock}</td>
-                                    <td className="text-end text-muted">${cost.toLocaleString('es-CL')}</td>
-                                    <td className="text-end fw-medium">${subtotal.toLocaleString('es-CL')}</td>
+                                    <td className="text-center align-middle">{product.stock}</td>
+                                    <td className="text-end align-middle">
+                                        <EditableCostCell product={product} onUpdate={handleCostUpdate} />
+                                    </td>
+                                    <td className="text-end fw-medium align-middle">${subtotal.toLocaleString('es-CL')}</td>
                                 </tr>
                             );
                         })}
-                        {/* Fila de Totales si hay filtro activo o siempre? Mejor siempre al final de la tabla filtrada */}
                         {filteredProducts.length > 0 && (
                             <tr className="table-secondary fw-bold">
                                 <td colSpan={2} className="text-end">TOTALES</td>
@@ -108,7 +198,7 @@ const ProductCostList: React.FC<ProductCostListProps> = ({ externalSelectedBrand
                 </table>
             </div>
             {filteredProducts.length === 0 && (
-                <div className="p-4 text-center text-muted">No se encontraron productos.</div>
+                <div className="p-4 text-center text-muted">No se encontraron productos probables para esta marca.</div>
             )}
         </div>
     );
