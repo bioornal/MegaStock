@@ -315,6 +315,12 @@ const CostUpdateForm: React.FC = () => {
             setSheetNotFound([]);
 
             const csv = await fetchGoogleSheetCsv(currentUrl);
+
+            // DEBUG: Log raw CSV text (first 1000 chars) to see actual structure
+            console.log('=== RAW CSV TEXT (primeros 1000 chars) ===');
+            console.log(csv.substring(0, 1000));
+            console.log('=== FIN RAW CSV ===');
+
             if (products.length === 0) await loadProducts();
 
             const prods = products.length > 0 ? products : await getProducts();
@@ -350,6 +356,14 @@ const CostUpdateForm: React.FC = () => {
             const productHeader = headersNorm[productHeaderIdx];
             const costHeader = headersNorm[costHeaderIdx];
 
+            // DEBUG: Log header detection
+            console.log('=== CSV PARSING DEBUG ===');
+            console.log('Headers encontrados:', headersNorm);
+            console.log('Columna de producto:', productHeader, 'idx:', productHeaderIdx);
+            console.log('Columna de costo:', costHeader, 'idx:', costHeaderIdx);
+            console.log('Marca detectada:', brandFromHeader || '(ninguna)');
+            console.log('Total filas en CSV:', parsed.rows.length);
+
             const entries = parsed.rows.map(r => {
                 const name = String(r[productHeader] ?? '').toString().trim();
                 const raw = r[costHeader];
@@ -361,6 +375,24 @@ const CostUpdateForm: React.FC = () => {
                     price: Number.isNaN(price) ? 0 : price,
                 };
             }).filter(e => e.name && e.price > 0);
+
+            // DEBUG: Log parsed entries with full detail
+            console.log('Entries parseados (con nombre y precio > 0):', entries.length);
+            if (entries.length > 0) {
+                console.log('Primeros 10 entries (nombre completo):', entries.slice(0, 10).map(e => ({ name: e.name, price: e.price })));
+            }
+
+            // DEBUG: Log RAW rows from CSV to see actual data
+            console.log('=== RAW CSV ROWS (primeras 5) ===');
+            if (parsed.rows.length > 0) {
+                parsed.rows.slice(0, 5).forEach((r, i) => {
+                    console.log(`Fila ${i}:`, {
+                        [productHeader]: r[productHeader],
+                        [costHeader]: r[costHeader],
+                        allKeys: Object.keys(r)
+                    });
+                });
+            }
 
             const productToUpdate = new Map<number, CostUpdate>();
             const notFound: SheetPriceEntry[] = [];
@@ -378,13 +410,69 @@ const CostUpdateForm: React.FC = () => {
                 productsByNormName.get(nName)!.push(p);
             }
 
+            // DEBUG: Log products in DB
+            console.log('=== PRODUCTOS EN DB ===');
+            console.log('Total productos en DB:', prods.length);
+            const dbBrands = Array.from(new Set(prods.map(p => p.brand)));
+            console.log('Marcas en DB:', dbBrands);
+            const brandKey = canon(brandFromHeader);
+            const candidatesForBrand = productsByBrand.get(brandKey) || [];
+            console.log(`Productos de marca "${brandFromHeader}" (canon: "${brandKey}"):`, candidatesForBrand.length);
+            if (candidatesForBrand.length > 0 && candidatesForBrand.length <= 20) {
+                console.log('Nombres de productos en DB para esta marca:', candidatesForBrand.map(p => p.name));
+            }
+
+            // ========= NUEVA LÓGICA DE MATCHING BASADA EN PALABRAS CLAVE =========
+            // La lógica principal: mínimo 2 palabras clave exactas deben coincidir
+            // Esto permite flexibilidad en medidas y variantes pero requiere que
+            // el tipo de mueble + modelo (o similar) coincidan exactamente.
+
+            // Función para extraer palabras clave significativas (excluyendo stopwords y números puros)
+            const extractKeywords = (s: string): string[] => {
+                const normalized = canon(s);
+                const tokens = normalized.split(' ').filter(Boolean);
+                // Filtrar tokens significativos: 
+                // - Mínimo 2 caracteres
+                // - No es stopword
+                // - No es solo números (pero mantener tokens alfanuméricos como "1P", "6UN")
+                return tokens.filter(t =>
+                    t.length >= 2 &&
+                    !STOPWORDS.has(t)
+                );
+            };
+
+            // Función para normalizar medidas: "1,40" → "140", "1.60" → "160"
+            const normalizeMeasure = (s: string): string => {
+                return s
+                    .replace(/(\d+)[,.](\d+)/g, '$1$2') // "1,40" → "140"
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            };
+
+            let matchedCount = 0;
+            let notFoundCount = 0;
+            let invalidCount = 0;
+
             for (const entry of entries) {
-                const brandKey = canon(entry.brand);
-                let candidates = productsByBrand.get(brandKey) || [];
+                // Validar que el nombre del entry sea válido (no solo números, mínimo 3 chars)
+                const trimmedName = (entry.name || '').trim();
+                // Solo ignorar si es SOLO números/espacios/puntuación Y muy corto
+                const isInvalidName = !trimmedName ||
+                    (trimmedName.length < 3 && /^[\d\s.,]+$/.test(trimmedName));
+
+                if (isInvalidName) {
+                    console.warn('Nombre de producto inválido ignorado:', entry.name, '(length:', trimmedName.length, ')');
+                    invalidCount++;
+                    continue;
+                }
+
+                const entryBrandKey = canon(entry.brand);
+                let candidates = productsByBrand.get(entryBrandKey) || [];
                 if (candidates.length === 0) candidates = prods;
 
-                // Intento 0: Coincidencia exacta
+                // Intento 0: Coincidencia exacta por nombre normalizado
                 const entryNormName = canon(entry.name);
+                const entryNormWithMeasures = normalizeMeasure(entryNormName);
                 const exactList = productsByNormName.get(entryNormName);
 
                 if (exactList && exactList.length > 0) {
@@ -408,66 +496,89 @@ const CostUpdateForm: React.FC = () => {
                     continue;
                 }
 
-                // Fuzzy matching logic reused exactly from PriceUpdateForm logic...
-                // Tokenización
-                const tokenizeCanon = (s: string) => canon(s).split(' ').filter(Boolean).filter(t => !STOPWORDS.has(t));
-                const eTokensRaw = tokenizeCanon(entry.name);
-                const stem = (t: string) => (t.length > 3 && t.endsWith('S') ? t.slice(0, -1) : t);
-                const eTokens = eTokensRaw
-                    .filter(t => t.length >= 2 || /^\d+$/.test(t))
-                    .map(stem);
+                // ========= MATCHING POR PALABRAS CLAVE (mínimo 2 exactas) =========
+                const entryKeywords = extractKeywords(entry.name);
+                const entryKeywordsWithMeasures = extractKeywords(normalizeMeasure(entry.name));
 
-                let best: { score: number; product: Product } | null = null;
-                const multiMatches: { score: number; product: Product }[] = [];
+                let best: { score: number; product: Product; matchedKeywords: string[] } | null = null;
+                const multiMatches: { score: number; product: Product; matchedKeywords: string[] }[] = [];
 
                 for (const p of candidates) {
-                    const pTokens = tokenizeCanon(p.name).map(stem);
-                    const overlapCount = eTokens.filter(t => pTokens.includes(t)).length;
-                    const overlapRatio = eTokens.length > 0 ? overlapCount / eTokens.length : 0;
-                    const similar = calculateSimilarity(canon(entry.name), canon(p.name));
+                    const productKeywords = extractKeywords(p.name);
+                    const productKeywordsWithMeasures = extractKeywords(normalizeMeasure(p.name));
 
-                    // Umbrales más flexibles: mínimo 2 palabras clave coincidentes
-                    // pero permitiendo variaciones en el resto del nombre
-                    let minOverlapCount = 2;
-                    let minSimilar = 0.65; // Reducido para ser más flexible
-                    // Moval exception
-                    if (brandKey === canon('Moval')) { minOverlapCount = 1; minSimilar = 0.55; }
+                    // Contar palabras clave exactas que coinciden
+                    const exactMatches = entryKeywords.filter(k => productKeywords.includes(k));
+                    // También probamos con medidas normalizadas
+                    const exactMatchesWithMeasures = entryKeywordsWithMeasures.filter(k =>
+                        productKeywordsWithMeasures.includes(k)
+                    );
 
-                    // Pasamos si hay al menos 2 tokens que coinciden O si la similitud es suficiente
-                    if (overlapCount < minOverlapCount && similar < minSimilar) continue;
+                    const matchCount = Math.max(exactMatches.length, exactMatchesWithMeasures.length);
+                    const matchedKeywords = exactMatches.length >= exactMatchesWithMeasures.length
+                        ? exactMatches
+                        : exactMatchesWithMeasures;
 
-                    const normName = canon(entry.name);
-                    const normProd = canon(p.name);
-                    const startsWithWholeWord = new RegExp(`\\b${normName.replace(/[-/\\^$*+?.()|[\]{}]/g, '')}\\b`).test(normProd);
-                    const containsEither = normProd.includes(normName) || normName.includes(normProd);
+                    // CRITERIO PRINCIPAL: Mínimo 2 palabras clave exactas deben coincidir
+                    if (matchCount >= 2) {
+                        // Calcular score basado en:
+                        // - Cantidad de keywords que coinciden
+                        // - Similitud adicional del nombre completo
+                        const similar = calculateSimilarity(entryNormName, canon(p.name));
 
-                    let score = 0;
-                    if (startsWithWholeWord) score += 5;
-                    if (containsEither) score += 7;
-                    score += Math.min(Math.round(overlapRatio * 10), 10);
-                    score += Math.min(Math.round(similar * 10), 10);
-                    const hasNumeric = eTokens.some(t => /\d/.test(t)) && pTokens.some(t => /\d/.test(t));
-                    if (hasNumeric) score += 2;
-                    score += Math.min(eTokens.length, 5);
-                    score += Math.min(normName.length / 5, 5);
+                        let score = matchCount * 15; // Base: 15 puntos por cada keyword
+                        score += Math.round(similar * 10); // Bonus: hasta 10 puntos por similitud
 
-                    const matchObj = { score, product: p };
-                    if (!best || score > best.score) best = matchObj;
-                    if (applyAllVariants) multiMatches.push(matchObj);
+                        // Bonus si coinciden números/medidas
+                        const entryNums = entryKeywords.filter(t => /\d/.test(t));
+                        const prodNums = productKeywords.filter(t => /\d/.test(t));
+                        const numMatch = entryNums.some(n => prodNums.includes(n));
+                        if (numMatch) score += 10;
+
+                        // Bonus si el nombre del producto contiene el del entry o viceversa
+                        if (entryNormName.includes(canon(p.name)) || canon(p.name).includes(entryNormName)) {
+                            score += 5;
+                        }
+
+                        const matchObj = { score, product: p, matchedKeywords };
+                        if (!best || score > best.score) best = matchObj;
+                        if (applyAllVariants) multiMatches.push(matchObj);
+                    }
                 }
 
-                // Fallback pass (relaxed)
+                // Fallback: si no hay match de 2+ keywords, intentar con similitud alta
                 if (!best) {
                     for (const p of candidates) {
-                        const normName = normalizeText(entry.name);
-                        const normProd = normalizeText(p.name);
-                        if (normName === normProd || normProd.includes(normName) || normName.includes(normProd)) {
-                            best = { score: 1e6, product: p };
+                        const normProd = canon(p.name);
+                        const similar = calculateSimilarity(entryNormName, normProd);
+
+                        // Si la similitud es muy alta (>85%), aceptar como match
+                        if (similar >= 0.85) {
+                            best = { score: Math.round(similar * 100), product: p, matchedKeywords: [] };
                             break;
                         }
-                        const slug = (s: string) => canon(s).replace(/\s+/g, '');
-                        if (slug(entry.name) === slug(p.name) || slug(p.name).includes(slug(entry.name)) || slug(entry.name).includes(slug(p.name))) {
-                            best = { score: 9e5, product: p };
+
+                        // O si uno contiene al otro completamente
+                        if (entryNormName.length > 3 && normProd.length > 3) {
+                            if (normProd.includes(entryNormName) || entryNormName.includes(normProd)) {
+                                best = { score: 50, product: p, matchedKeywords: [] };
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Segundo fallback: match por slug (sin espacios)
+                if (!best) {
+                    const slug = (s: string) => normalizeMeasure(canon(s)).replace(/\s+/g, '');
+                    const entrySlug = slug(entry.name);
+
+                    for (const p of candidates) {
+                        const prodSlug = slug(p.name);
+                        if (entrySlug === prodSlug ||
+                            (entrySlug.length > 5 && prodSlug.includes(entrySlug)) ||
+                            (prodSlug.length > 5 && entrySlug.includes(prodSlug))) {
+                            best = { score: 40, product: p, matchedKeywords: [] };
                             break;
                         }
                     }
@@ -489,6 +600,7 @@ const CostUpdateForm: React.FC = () => {
                                 manuallyModified: false,
                             });
                         });
+                        matchedCount++;
                     } else {
                         const p = best.product;
                         productToUpdate.set(p.id, {
@@ -500,10 +612,25 @@ const CostUpdateForm: React.FC = () => {
                             selected: true,
                             manuallyModified: false,
                         });
+                        matchedCount++;
                     }
                 } else {
+                    // Solo agregar a notFound si el nombre es válido
                     notFound.push(entry);
+                    notFoundCount++;
                 }
+            }
+
+            // DEBUG: Log final results
+            console.log('=== RESULTADO FINAL ===');
+            console.log('Total entries procesados:', entries.length);
+            console.log('Matched:', matchedCount);
+            console.log('Not found:', notFoundCount);
+            console.log('Inválidos ignorados:', invalidCount);
+            console.log('Productos a actualizar (unique):', productToUpdate.size);
+            console.log('Productos en notFound array:', notFound.length);
+            if (notFound.length > 0) {
+                console.log('Primeros 5 no encontrados:', notFound.slice(0, 5).map(e => e.name));
             }
 
             // Ordenar notFound para mostrar primero los que tienen costo más alto

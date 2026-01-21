@@ -70,6 +70,15 @@ export function smartParseInt(val: string | number): number {
   if (!val) return NaN;
 
   let strVal = val.toString().trim();
+
+  // IMPORTANT: If the value contains letters (A-Z, a-z, or accented chars like á, é, ü),
+  // it's clearly NOT a number - return NaN immediately.
+  // This prevents "BAÚL BERLIM 1,40" from being parsed as "1" or "140"
+  const hasLetters = /[a-zA-Z\u00C0-\u024F]/.test(strVal);
+  if (hasLetters) {
+    return NaN;
+  }
+
   // Remove currency symbols and other non-numeric chars except . , -
   strVal = strVal.replace(/[^0-9.,-]/g, '');
 
