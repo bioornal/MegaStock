@@ -3,8 +3,10 @@
 import { useState, useEffect, useMemo, KeyboardEvent, useCallback } from 'react';
 import { Product, getProducts, updateProduct, deleteProduct } from '@/services/productService';
 import { BRANDS } from '@/lib/productOptions';
-import { Edit, Trash2, Check, X, Search, Filter, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
+import { Edit, Trash2, Check, X, Search, Filter, ChevronLeft, ChevronRight, Printer, FileDown } from 'lucide-react';
 import { useDebounce, useLocalCache } from '@/lib/hooks';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Props del componente
 interface ProductTableProps {
@@ -213,6 +215,95 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
     }, 500);
   };
 
+  // Función para descargar PDF agrupado por marcas
+  const handleDownloadPDF = async () => {
+    // 1. Obtener todos los productos (asegurarnos de tener la lista completa)
+    // Si products ya tiene todos, usamos eso. Si no, habría que llamar a la API.
+    // Asumimos que 'products' tiene la carga inicial completa.
+    // Filtramos productos con stock 0
+    const allProducts = products.filter(p => p.stock > 0);
+
+    if (allProducts.length === 0) {
+      alert("No hay productos para generar el PDF.");
+      return;
+    }
+
+    const doc = new jsPDF();
+    const fecha = new Date().toLocaleDateString('es-AR');
+
+    // Título del Documento
+    doc.setFontSize(18);
+    doc.text('Inventario Completo de Stock', 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Fecha: ${fecha} - Total productos: ${allProducts.length}`, 14, 28);
+
+    // 2. Agrupar productos por marca
+    // Ordenamos las marcas alfabéticamente para que salgan en orden
+    const productsByBrand: Record<string, Product[]> = {};
+
+    // Inicializar grupos
+    allProducts.forEach(p => {
+      const brand = p.brand || 'Sin Marca';
+      if (!productsByBrand[brand]) {
+        productsByBrand[brand] = [];
+      }
+      productsByBrand[brand].push(p);
+    });
+
+    const sortedBrands = Object.keys(productsByBrand).sort();
+
+    let finalY = 35; // Posición vertical inicial
+
+    // 3. Generar tablas por cada marca
+    sortedBrands.forEach((brand) => {
+      const brandProducts = productsByBrand[brand].sort((a, b) => a.name.localeCompare(b.name));
+
+      // Título de la sección (Marca)
+      // Verificamos si necesitamos nueva página
+      if (finalY > 250) {
+        doc.addPage();
+        finalY = 20;
+      }
+
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text(brand, 14, finalY);
+
+      // Tabla de productos de esa marca
+      autoTable(doc, {
+        startY: finalY + 5,
+        head: [['Producto', 'Color', 'Stock', 'Precio']],
+        body: brandProducts.map(p => [
+          p.name.toUpperCase(),
+          p.color || '-',
+          p.stock,
+          `$${p.price.toLocaleString('es-CL')}`
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [66, 66, 66] },
+        styles: { fontSize: 10 },
+        columnStyles: {
+          0: { cellWidth: 'auto' }, // Producto
+          1: { cellWidth: 30 },     // Color
+          2: { cellWidth: 20, halign: 'center' }, // Stock
+          3: { cellWidth: 30, halign: 'right' }   // Precio
+        },
+        // Actualizar finalY para la siguiente tabla
+        didDrawPage: (data) => {
+          // Si la tabla salta de página, resetear finalY es complicado aquí, 
+          // pero autoTable devuelve la posición final
+        },
+      });
+
+      // @ts-ignore
+      finalY = doc.lastAutoTable.finalY + 15;
+    });
+
+    // Guardar PDF
+    const filename = `inventario_completo_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(filename);
+  };
+
   // Cálculos de paginación
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -299,9 +390,17 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
           <button
             onClick={handlePrint}
             className="btn btn-outline-secondary border-2 d-flex align-items-center gap-1"
-            title="Imprimir lista"
+            title="Imprimir visualización actual"
           >
             <Printer size={18} />
+          </button>
+
+          <button
+            onClick={handleDownloadPDF}
+            className="btn btn-outline-secondary border-2 d-flex align-items-center gap-1"
+            title="Descargar PDF completo por marcas"
+          >
+            <FileDown size={18} />
           </button>
 
           <a href="/admin/inventory-value" className="btn btn-outline-success border-2 fw-medium d-flex align-items-center gap-1" style={{ whiteSpace: 'nowrap' }}>
