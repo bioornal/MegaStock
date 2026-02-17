@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, KeyboardEvent, useCallback } from 'react';
 import { Product, getProducts, updateProduct, deleteProduct } from '@/services/productService';
 import { BRANDS } from '@/lib/productOptions';
-import { Edit, Trash2, Check, X, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Edit, Trash2, Check, X, Search, Filter, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import { useDebounce, useLocalCache } from '@/lib/hooks';
 
 // Props del componente
@@ -147,6 +147,72 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
       });
   }, [products, selectedBrand, debouncedSearchTerm]);
 
+  // Función para imprimir
+  const handlePrint = () => {
+    const printWindow = window.open('', '', 'height=600,width=800');
+    if (!printWindow) return;
+
+    // Generar el contenido HTML para la impresión
+    // Usamos filteredProducts para imprimir lo que el usuario está viendo actualmente
+    const productsToPrint = filteredProducts;
+
+    // Título dinámico
+    const title = selectedBrand
+      ? `Lista de Stock - ${selectedBrand}`
+      : 'Lista de Stock Completa';
+
+    const fecha = new Date().toLocaleDateString('es-AR');
+
+    printWindow.document.write('<html><head><title>Imprimir Stock</title>');
+    printWindow.document.write(`
+      <style>
+        body { font-family: sans-serif; padding: 20px; }
+        h1 { text-align: center; margin-bottom: 5px; }
+        .subtitle { text-align: center; margin-bottom: 20px; color: #666; font-size: 0.9em; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+        th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        @media print {
+          button { display: none; }
+          body { -webkit-print-color-adjust: exact; }
+        }
+      </style>
+    `);
+    printWindow.document.write('</head><body>');
+    printWindow.document.write(`<h1>${title}</h1>`);
+    printWindow.document.write(`<div class="subtitle">Fecha: ${fecha} - Total productos: ${productsToPrint.length}</div>`);
+    printWindow.document.write('<table>');
+    printWindow.document.write('<thead><tr><th>Producto</th><th>Marca</th><th>Color</th><th class="text-center">Stock</th><th class="text-right">Precio</th></tr></thead>');
+    printWindow.document.write('<tbody>');
+
+    productsToPrint.forEach(p => {
+      printWindow.document.write(`
+        <tr>
+          <td>${p.name.toUpperCase()}</td>
+          <td>${p.brand}</td>
+          <td>${p.color || '-'}</td>
+          <td class="text-center">${p.stock}</td>
+          <td class="text-right">$${p.price.toLocaleString('es-CL')}</td>
+        </tr>
+      `);
+    });
+
+    printWindow.document.write('</tbody></table>');
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.focus();
+
+    // Esperar un momento para asegurar que los estilos se carguen
+    setTimeout(() => {
+      printWindow.print();
+      // Opcional: cerrar la ventana después de imprimir (algunos navegadores bloquean esto si no es inmediato)
+      // printWindow.close();
+    }, 500);
+  };
+
   // Cálculos de paginación
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -229,6 +295,15 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
               ))}
             </select>
           </div>
+
+          <button
+            onClick={handlePrint}
+            className="btn btn-outline-secondary border-2 d-flex align-items-center gap-1"
+            title="Imprimir lista"
+          >
+            <Printer size={18} />
+          </button>
+
           <a href="/admin/inventory-value" className="btn btn-outline-success border-2 fw-medium d-flex align-items-center gap-1" style={{ whiteSpace: 'nowrap' }}>
             📊 Costos
           </a>
