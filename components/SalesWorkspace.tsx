@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { CashSession, Ticket, getTicketsBySession, createTicketWithItems, getTicketWithItems } from '@/services/vendorService';
 import { getProducts, Product } from '@/services/productService';
 import { Customer, getDefaultCustomer, TicketData } from '@/services/customerService';
-import { ShoppingCart, Plus, Trash2, CreditCard, Smartphone, DollarSign, Search, Save, AlertCircle, User, FileText, Minus, X, Package, Users, Receipt } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Search, AlertCircle, User, Minus, X, Receipt } from 'lucide-react';
 import { useDebounce } from '@/lib/hooks';
 import { salesPersistence } from '@/lib/salesPersistence';
 import CustomerForm from './CustomerForm';
@@ -24,6 +24,13 @@ interface SaleItem {
 
 type PaymentMethod = 'cash' | 'card' | 'qr' | 'transfer';
 interface PaymentSplit { method: PaymentMethod; amount: number }
+
+const PAYMENT_OPTIONS: { key: PaymentMethod; label: string; icon: string }[] = [
+  { key: 'cash', label: 'Efectivo', icon: '$' },
+  { key: 'card', label: 'Tarjeta', icon: '~' },
+  { key: 'qr', label: 'QR', icon: '#' },
+  { key: 'transfer', label: 'Transfer', icon: '>' },
+];
 
 const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -67,7 +74,6 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
     fetchData();
   }, [cashSession.id, cashSession.vendor_id]);
 
-  // Filtrar productos basado en búsqueda
   useEffect(() => {
     if (!debouncedSearchTerm.trim()) {
       setFilteredProducts([]);
@@ -89,7 +95,6 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
     setFilteredProducts(filtered);
   }, [debouncedSearchTerm, products]);
 
-  // Auto-guardar draft cuando cambian los items
   useEffect(() => {
     if (salesItems.length > 0) {
       const draftItems = salesItems.map(item => ({
@@ -121,6 +126,8 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
       };
       setSalesItems([...salesItems, newItem]);
     }
+    // Clear search after adding
+    setSearchTerm('');
   };
 
   const handleQuantityChange = (index: number, quantity: number) => {
@@ -136,7 +143,6 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
     setSalesItems(newItems);
   };
 
-  // Cálculo de subtotal por ítem (debe declararse antes de ser usada)
   function calculateItemSubtotal(item: SaleItem): number {
     const baseSubtotal = item.quantity * item.unitPrice;
     if (item.applyPromotion && item.quantity >= 2) {
@@ -146,17 +152,14 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
     return baseSubtotal;
   }
 
-  // Ticket-level payments handling
   const totalAmount = useCallback((): number => salesItems.reduce((sum, item) => sum + calculateItemSubtotal(item), 0), [salesItems]);
   const paymentsTotal = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-  const remainingToAssign = Math.max(0, totalAmount() - paymentsTotal);
 
   const setSinglePaymentCoveringTotal = () => {
     setPayments([{ method: 'cash', amount: totalAmount() }]);
   };
 
   useEffect(() => {
-    // Auto-adjust first payment to cover total if only one line exists
     if (payments.length === 1) {
       const currentTotal = totalAmount();
       if (payments[0].amount !== currentTotal) {
@@ -226,7 +229,6 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
     setError('');
 
     try {
-      // Validar pagos divididos a nivel ticket
       if (payments.length === 0) {
         setSinglePaymentCoveringTotal();
       }
@@ -237,14 +239,13 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
       }
       for (const p of payments) {
         if (!['cash', 'card', 'qr', 'transfer'].includes(p.method)) {
-          throw new Error('Método de pago inválido.');
+          throw new Error('Metodo de pago invalido.');
         }
         if (p.amount < 0) {
           throw new Error('Los montos de pago no pueden ser negativos.');
         }
       }
 
-      // Construir items para la RPC
       const itemsPayload = salesItems.map(item => ({
         product_id: item.product.id,
         quantity: item.quantity,
@@ -252,7 +253,6 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
         total_amount: calculateItemSubtotal(item),
       }));
 
-      // Crear ticket + items en una sola transacción
       const result = await createTicketWithItems({
         cash_session_id: cashSession.id,
         customer_id: selectedCustomer?.id || null,
@@ -260,15 +260,13 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
         payments: payments.map(p => ({ payment_method: p.method, amount: p.amount })) as any,
       });
 
-      // Cargar detalle completo para impresión/visualización
       const detail = await getTicketWithItems(result.ticket.id);
-      // Mapear a la forma TicketData usada por TicketPrint
       const defaultCustomer = await getDefaultCustomer();
       const td: TicketData = {
         ticket_number: detail.ticket.ticket_number,
         customer: (detail.ticket.customer as any) || defaultCustomer,
         sale_items: detail.items.map(it => {
-          const totalFinal = it.total_amount; // total con IVA
+          const totalFinal = it.total_amount;
           const subtotalNeto = totalFinal / 1.21;
           const unitPriceFinal = it.unit_price;
           const unitPriceNeto = unitPriceFinal / 1.21;
@@ -292,11 +290,9 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
       setTicketData(td);
       setShowTicket(true);
 
-      // Limpiar formulario
       clearSale();
       onSaleRegistered();
 
-      // Actualizar tickets recientes
       try {
         const updatedTickets = await getTicketsBySession(cashSession.id);
         setRecentTickets(updatedTickets);
@@ -329,397 +325,227 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
     setDraftSummary('');
   };
 
+  const discount = calculatePromotionDiscount();
+
   return (
-    <div className="container-fluid px-0">
-      {/* Draft pendiente */}
+    <div className="ms-animate-in">
+      {/* Draft notification */}
       {hasPendingDraft && (
-        <div className="row mb-4">
-          <div className="col-12">
-            <div className="alert alert-info border-0 shadow-sm d-flex align-items-center" role="alert">
-              <AlertCircle size={24} className="me-3 text-info" />
-              <div className="flex-grow-1">
-                <strong>📋 Datos pendientes encontrados:</strong>
-                <p className="mb-0 mt-1">{draftSummary}</p>
-              </div>
-              <div className="ms-3">
-                <button className="btn btn-info me-2" onClick={recoverDraft}>
-                  Recuperar
-                </button>
-                <button className="btn btn-outline-secondary" onClick={discardDraft}>
-                  Descartar
-                </button>
-              </div>
-            </div>
+        <div
+          className="mb-3"
+          style={{
+            background: 'var(--ms-blue-dim)',
+            border: '1px solid rgba(116, 185, 255, 0.2)',
+            borderRadius: 'var(--ms-radius-md)',
+            padding: '0.75rem 1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem'
+          }}
+        >
+          <AlertCircle size={18} style={{ color: 'var(--ms-blue)', flexShrink: 0 }} />
+          <div style={{ flex: 1, fontSize: '0.85rem', color: 'var(--ms-blue)' }}>
+            <strong>Venta pendiente:</strong> {draftSummary}
           </div>
+          <button className="btn btn-sm" onClick={recoverDraft} style={{ background: 'var(--ms-blue)', color: '#fff', fontSize: '0.8rem' }}>
+            Recuperar
+          </button>
+          <button className="btn btn-sm" onClick={discardDraft} style={{ background: 'var(--ms-bg-surface)', color: 'var(--ms-text-muted)', fontSize: '0.8rem' }}>
+            Descartar
+          </button>
         </div>
       )}
 
-      {/* Resumen de Caja Súper Compacto */}
-      <div className="row mb-2">
-        <div className="col-12">
-          <div className="d-flex justify-content-between align-items-center bg-light rounded p-2 shadow-sm">
-            <div className="d-flex align-items-center">
-              <span className="badge bg-success me-2">💰</span>
-              <small className="fw-bold">Tickets Hoy: {recentTickets.length}</small>
-            </div>
-            <div className="d-flex align-items-center">
-              <small className="text-muted me-2">Total:</small>
-              <strong className="text-primary">${recentTickets.reduce((sum, t) => sum + t.total_amount, 0).toLocaleString()}</strong>
-            </div>
-            {cashSession && (
-              <div className="d-flex align-items-center">
-                <span className="badge bg-success">✓ Caja Activa</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="row">
-        {/* COLUMNA IZQUIERDA - Búsqueda y Productos */}
-        <div className="col-lg-5">
-          {/* Búsqueda de Productos */}
-          <div className="card border-0 shadow-sm mb-3">
-            <div className="card-body py-3">
-              <div className="row align-items-center">
-                <div className="col-md-9">
-                  <div className="input-group input-group-lg">
-                    <span className="input-group-text bg-primary text-white border-0">
-                      <Search size={24} />
-                    </span>
-                    <input
-                      type="text"
-                      className="form-control border-0"
-                      placeholder="🔍 Buscar productos por nombre, marca o color..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      style={{ fontSize: '18px', fontWeight: '500' }}
-                    />
-                  </div>
-                </div>
-                <div className="col-md-3 text-end">
-                  <div className="d-flex align-items-center justify-content-end">
-                    <span className="badge bg-info fs-6 me-2">{products.filter(p => p.stock > 0).length} productos</span>
-                    {salesItems.length > 0 && (
-                      <span className="badge bg-success fs-6">Auto-guardado ✓</span>
-                    )}
-                  </div>
-                </div>
-              </div>
+      <div className="row g-3">
+        {/* ═══════════ LEFT COLUMN — Search + Products ═══════════ */}
+        <div className="col-lg-6">
+          {/* Search bar */}
+          <div
+            style={{
+              background: 'var(--ms-bg-raised)',
+              border: '1px solid var(--ms-border)',
+              borderRadius: 'var(--ms-radius-md)',
+              padding: '0.75rem',
+              marginBottom: '0.75rem'
+            }}
+          >
+            <div className="d-flex align-items-center gap-2">
+              <Search size={20} style={{ color: 'var(--ms-accent)', flexShrink: 0 }} />
+              <input
+                type="text"
+                className="form-control border-0"
+                placeholder="Buscar producto por nombre, marca o color..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                autoFocus
+                style={{
+                  background: 'transparent',
+                  color: 'var(--ms-text-primary)',
+                  fontSize: '1rem',
+                  fontWeight: 500,
+                  padding: '0.4rem 0.5rem',
+                  boxShadow: 'none'
+                }}
+              />
+              <span
+                style={{
+                  color: 'var(--ms-text-muted)',
+                  fontSize: '0.75rem',
+                  whiteSpace: 'nowrap',
+                  background: 'var(--ms-bg-surface)',
+                  padding: '0.25rem 0.6rem',
+                  borderRadius: 'var(--ms-radius-sm)'
+                }}
+              >
+                {products.filter(p => p.stock > 0).length} productos
+              </span>
             </div>
           </div>
 
-          {/* Lista de Productos Disponibles */}
+          {/* Product results */}
           {filteredProducts.length > 0 && (
-            <div className="card border-0 shadow-sm mb-3">
-              <div className="card-header bg-light border-0 py-2">
-                <h6 className="mb-0 text-primary">📦 Productos Disponibles ({filteredProducts.length})</h6>
+            <div
+              style={{
+                background: 'var(--ms-bg-raised)',
+                border: '1px solid var(--ms-border)',
+                borderRadius: 'var(--ms-radius-md)',
+                maxHeight: '65vh',
+                overflowY: 'auto'
+              }}
+            >
+              <div
+                style={{
+                  padding: '0.5rem 0.75rem',
+                  borderBottom: '1px solid var(--ms-border)',
+                  color: 'var(--ms-text-muted)',
+                  fontSize: '0.75rem',
+                  fontFamily: 'Outfit, sans-serif',
+                  fontWeight: 500,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}
+              >
+                {filteredProducts.length} resultados
               </div>
-              <div className="card-body p-0">
-                <div className="list-group list-group-flush">
-                  {filteredProducts.slice(0, 20).map(product => (
-                    <button
-                      key={product.id}
-                      type="button"
-                      className="list-group-item list-group-item-action d-flex align-items-center justify-content-between"
-                      onClick={() => addProductToSale(product)}
+              {filteredProducts.slice(0, 30).map(product => (
+                <button
+                  key={product.id}
+                  type="button"
+                  onClick={() => addProductToSale(product)}
+                  style={{
+                    display: 'flex',
+                    width: '100%',
+                    padding: '0.65rem 0.75rem',
+                    border: 'none',
+                    borderBottom: '1px solid var(--ms-border)',
+                    background: 'transparent',
+                    color: 'var(--ms-text-primary)',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s ease',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    textAlign: 'left'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--ms-bg-hover)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem', lineHeight: 1.3 }}>
+                      {product.name}
+                    </div>
+                    <div style={{ color: 'var(--ms-text-muted)', fontSize: '0.78rem' }}>
+                      {product.brand}
+                      {product.color && <span> / {product.color}</span>}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ color: 'var(--ms-green)', fontWeight: 700, fontFamily: 'Outfit, sans-serif', fontSize: '0.95rem' }}>
+                      ${product.price.toLocaleString()}
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '0.7rem',
+                        padding: '0.15rem 0.4rem',
+                        borderRadius: '4px',
+                        background: product.stock > 5 ? 'var(--ms-green-dim)' : product.stock > 2 ? 'var(--ms-amber-dim)' : 'var(--ms-red-dim)',
+                        color: product.stock > 5 ? 'var(--ms-green)' : product.stock > 2 ? 'var(--ms-amber)' : 'var(--ms-red)',
+                      }}
                     >
-                      <div className="me-3 text-start">
-                        <div className="fw-bold" style={{ fontSize: '15px' }}>
-                          {product.name}
-                        </div>
-                        <small className="text-muted">
-                          <strong>{product.brand}</strong>
-                          {product.color && <span className="ms-1">• {product.color}</span>}
-                        </small>
-                      </div>
-                      <div className="text-end" style={{ minWidth: '140px' }}>
-                        <div className="text-success fw-bold">${product.price.toLocaleString()}</div>
-                        <span className={`badge ${product.stock > 5 ? 'bg-success' :
-                            product.stock > 2 ? 'bg-warning text-dark' : 'bg-danger'
-                          }`}>
-                          {product.stock} unid.
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-        </div>
-
-        {/* COLUMNA CENTRO - Carrito */}
-        <div className="col-lg-5">
-          {/* Carrito de Compras */}
-          {salesItems.length > 0 && (
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-success text-white border-0">
-                <div className="d-flex justify-content-between align-items-center">
-                  <h5 className="mb-0">
-                    <ShoppingCart size={20} className="me-2" />
-                    Carrito de Compras ({salesItems.length} productos)
-                  </h5>
-                  <button
-                    className="btn btn-outline-light btn-sm"
-                    onClick={clearSale}
-                  >
-                    <Trash2 size={16} />
-                    Limpiar Todo
-                  </button>
-                </div>
-              </div>
-              <div className="card-body p-0">
-                <div className="table-responsive">
-                  <table className="table table-hover mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th className="border-0">Producto</th>
-                        <th className="border-0 text-center">Cantidad</th>
-                        <th className="border-0">Precio Unit.</th>
-                        <th className="border-0 text-center">2x1</th>
-                        <th className="border-0 text-end">Subtotal</th>
-                        <th className="border-0 text-center">Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {salesItems.map((item, index) => (
-                        <tr key={index}>
-                          <td className="py-3">
-                            <div>
-                              <strong className="text-dark">{item.product.name}</strong>
-                              <br />
-                              <small className="text-muted">{item.product.brand} {item.product.color && `• ${item.product.color}`}</small>
-                            </div>
-                          </td>
-                          <td className="py-3 text-center">
-                            <div className="d-flex align-items-center justify-content-center">
-                              <button
-                                className="btn btn-outline-secondary btn-sm me-2"
-                                onClick={() => handleQuantityChange(index, item.quantity - 1)}
-                                disabled={item.quantity <= 1}
-                              >
-                                <Minus size={14} />
-                              </button>
-                              <span className="fw-bold mx-2" style={{ minWidth: '30px', textAlign: 'center' }}>
-                                {item.quantity}
-                              </span>
-                              <button
-                                className="btn btn-outline-secondary btn-sm ms-2"
-                                onClick={() => handleQuantityChange(index, item.quantity + 1)}
-                                disabled={item.quantity >= item.product.stock}
-                              >
-                                <Plus size={14} />
-                              </button>
-                            </div>
-                          </td>
-                          <td className="py-3">
-                            <input
-                              type="number"
-                              className="form-control form-control-sm"
-                              style={{ width: '100px' }}
-                              value={item.unitPrice}
-                              min="0"
-                              step="100"
-                              onChange={(e) => handlePriceChange(index, parseInt(e.target.value) || 0)}
-                            />
-                          </td>
-                          <td className="py-3 text-center">
-                            <div className="form-check d-flex justify-content-center">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                                checked={item.applyPromotion}
-                                onChange={(e) => handlePromotionChange(index, e.target.checked)}
-                              />
-                            </div>
-                          </td>
-                          <td className="py-3 text-end">
-                            <strong className="text-success fs-6">${calculateItemSubtotal(item).toLocaleString()}</strong>
-                          </td>
-                          <td className="py-3 text-center">
-                            <button
-                              className="btn btn-outline-danger btn-sm"
-                              onClick={() => removeProductFromSale(index)}
-                            >
-                              <X size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Total del Carrito */}
-                <div className="p-4 bg-light border-top">
-                  <div className="row">
-                    <div className="col-md-6 offset-md-6">
-                      <div className="card border-0 shadow-sm">
-                        <div className="card-body p-3">
-                          <div className="d-flex justify-content-between mb-2">
-                            <span>Subtotal:</span>
-                            <span className="fw-bold">${calculateSubtotal().toLocaleString()}</span>
-                          </div>
-                          <div className="d-flex justify-content-between mb-2">
-                            <span className="text-success">Descuento 2x1:</span>
-                            <span className="text-success fw-bold">-${calculatePromotionDiscount().toLocaleString()}</span>
-                          </div>
-                          <hr className="my-2" />
-                          <div className="d-flex justify-content-between">
-                            <strong className="fs-5">TOTAL:</strong>
-                            <strong className="text-primary fs-4">${calculateTotal().toLocaleString()}</strong>
-                          </div>
-                          {/* Split de Pagos a nivel Ticket */}
-                          <div className="mt-3 p-2 border rounded">
-                            <div className="d-flex justify-content-between align-items-center mb-2">
-                              <strong>Pagos</strong>
-                              <small className={paymentsTotal === totalAmount() ? 'text-success' : 'text-danger'}>
-                                Asignado: ${paymentsTotal.toLocaleString()} / ${totalAmount().toLocaleString()}
-                              </small>
-                            </div>
-                            {payments.map((p, idx) => (
-                              <div key={idx} className="d-flex align-items-center mb-2 gap-2">
-                                <select
-                                  className="form-select form-select-sm"
-                                  style={{ maxWidth: 160 }}
-                                  value={p.method}
-                                  onChange={(e) => updatePaymentMethod(idx, e.target.value as PaymentMethod)}
-                                >
-                                  <option value="cash">💵 Efectivo</option>
-                                  <option value="card">💳 Tarjeta</option>
-                                  <option value="qr">📱 QR</option>
-                                  <option value="transfer">🏦 Transferencia</option>
-                                </select>
-                                <input
-                                  type="number"
-                                  className="form-control form-control-sm"
-                                  style={{ maxWidth: 140 }}
-                                  value={p.amount}
-                                  min={0}
-                                  step={100}
-                                  onChange={(e) => updatePaymentAmount(idx, parseInt(e.target.value) || 0)}
-                                />
-                                {payments.length > 1 && (
-                                  <button className="btn btn-outline-danger btn-sm" onClick={() => removePaymentLine(idx)}>
-                                    <X size={14} />
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                            <div className="d-flex gap-2 mt-2">
-                              <button className="btn btn-outline-success btn-sm" onClick={() => addPaymentLine('cash')}>+ Efectivo</button>
-                              <button className="btn btn-outline-primary btn-sm" onClick={() => addPaymentLine('card')}>+ Tarjeta</button>
-                              <button className="btn btn-outline-dark btn-sm" onClick={() => addPaymentLine('transfer')}>+ Transferencia</button>
-                              <button className="btn btn-outline-secondary btn-sm" onClick={() => addPaymentLine('qr')}>+ QR</button>
-                            </div>
-                            {paymentsTotal !== totalAmount() && (
-                              <div className="mt-2 text-danger small">La suma de los pagos debe coincidir con el total.</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                      {product.stock} u.
+                    </span>
                   </div>
-                </div>
-              </div>
+                </button>
+              ))}
             </div>
           )}
 
-
-          {error && (
-            <div className="alert alert-danger mt-3 border-0 shadow-sm">
-              <AlertCircle size={20} className="me-2" />
-              {error}
-            </div>
-          )}
-
-        </div>
-
-        {/* COLUMNA DERECHA - Cliente, Ventas Recientes y Acciones */}
-        <div className="col-lg-2">
-          {/* Panel de Cliente Compacto */}
-          <div className="card border-0 shadow-sm mb-3">
-            <div className="card-header bg-info text-white border-0 py-2">
-              <h6 className="mb-0 d-flex align-items-center justify-content-between">
-                <span>
-                  <User size={16} className="me-2" />
-                  👤 Cliente
+          {/* Recent tickets panel (when no search active) */}
+          {!debouncedSearchTerm.trim() && recentTickets.length > 0 && (
+            <div
+              style={{
+                background: 'var(--ms-bg-raised)',
+                border: '1px solid var(--ms-border)',
+                borderRadius: 'var(--ms-radius-md)',
+                marginTop: '0.75rem'
+              }}
+            >
+              <div
+                style={{
+                  padding: '0.5rem 0.75rem',
+                  borderBottom: '1px solid var(--ms-border)',
+                  color: 'var(--ms-text-muted)',
+                  fontSize: '0.75rem',
+                  fontFamily: 'Outfit, sans-serif',
+                  fontWeight: 500,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+              >
+                <span>Tickets recientes</span>
+                <span style={{ color: 'var(--ms-green)', fontWeight: 600 }}>
+                  ${recentTickets.reduce((sum, t) => sum + t.total_amount, 0).toLocaleString()}
                 </span>
-                {selectedCustomer && (
-                  <button
-                    className="btn btn-sm btn-outline-light"
-                    onClick={() => setSelectedCustomer(null)}
-                    style={{ padding: '2px 8px' }}
+              </div>
+              <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                {recentTickets.slice(0, 8).map(ticket => (
+                  <div
+                    key={ticket.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '0.45rem 0.75rem',
+                      borderBottom: '1px solid var(--ms-border)',
+                      fontSize: '0.8rem'
+                    }}
                   >
-                    <X size={12} />
-                  </button>
-                )}
-              </h6>
-            </div>
-            <div className="card-body py-2">
-              {selectedCustomer ? (
-                <div>
-                  <div className="mb-1">
-                    <strong style={{ fontSize: '14px' }}>{selectedCustomer.name}</strong>
-                  </div>
-                  <small className="text-muted d-block">
-                    {selectedCustomer.cuit_dni}
-                    {selectedCustomer.address && ` • ${selectedCustomer.address}`}
-                  </small>
-                </div>
-              ) : (
-                <div className="text-center py-2">
-                  <button
-                    className="btn btn-info w-100"
-                    onClick={() => setShowCustomerForm(true)}
-                    style={{ fontSize: '14px' }}
-                  >
-                    <User size={16} className="me-2" />
-                    Agregar Cliente
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Tickets Recientes Compactos */}
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-secondary text-white border-0 py-2">
-              <h6 className="mb-0" style={{ fontSize: '14px' }}>
-                <FileText size={14} className="me-2" />
-                📈 Hoy: {recentTickets.length} tickets - ${recentTickets.reduce((sum, t) => sum + t.total_amount, 0).toLocaleString()}
-              </h6>
-            </div>
-            <div className="card-body p-2" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-              {recentTickets.length === 0 ? (
-                <div className="text-center py-2">
-                  <small className="text-muted">No hay ventas registradas</small>
-                </div>
-              ) : (
-                recentTickets.slice(0, 5).map(ticket => (
-                  <div key={ticket.id} className="d-flex justify-content-between align-items-center py-1 border-bottom">
-                    <div className="d-flex align-items-center">
-                      <div>
-                        <strong className="text-success" style={{ fontSize: '13px' }}>
-                          ${ticket.total_amount.toLocaleString()}
-                        </strong>
-                        <span className="ms-2" style={{ fontSize: '12px' }}>
-                          🧾
-                        </span>
-                      </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Receipt size={12} style={{ color: 'var(--ms-text-muted)' }} />
+                      <span style={{ color: 'var(--ms-green)', fontWeight: 600, fontFamily: 'Outfit, sans-serif' }}>
+                        ${ticket.total_amount.toLocaleString()}
+                      </span>
                     </div>
-                    <div className="d-flex align-items-center">
-                      <small className="text-muted me-2" style={{ fontSize: '11px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ color: 'var(--ms-text-muted)', fontSize: '0.75rem' }}>
                         {new Date(ticket.created_at).toLocaleTimeString('es-CL', {
                           hour: '2-digit',
                           minute: '2-digit'
                         })}
-                      </small>
+                      </span>
                       <button
-                        className="btn btn-outline-primary btn-sm"
-                        style={{ padding: '2px 6px', fontSize: '10px' }}
+                        className="btn btn-sm"
+                        style={{
+                          padding: '0.15rem 0.5rem',
+                          fontSize: '0.7rem',
+                          background: 'var(--ms-accent-dim)',
+                          color: 'var(--ms-accent-light)',
+                          border: '1px solid var(--ms-border-accent)',
+                          borderRadius: '4px'
+                        }}
                         onClick={async () => {
                           try {
                             const detail = await getTicketWithItems(ticket.id);
@@ -753,52 +579,473 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
                             setShowTicket(true);
                           } catch (error) {
                             console.error('Error al cargar ticket:', error);
-                            alert('Error al cargar el ticket');
                           }
                         }}
-                        title="Imprimir ticket"
                       >
-                        🗺️
+                        Ver
                       </button>
                     </div>
                   </div>
-                ))
-              )}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Acciones de Venta */}
-          <div className="card border-0 shadow-sm mt-3">
-            <div className="card-body p-2">
-              <div className="d-grid gap-2">
+        {/* ═══════════ RIGHT COLUMN — Cart + Checkout ═══════════ */}
+        <div className="col-lg-6">
+          {salesItems.length === 0 ? (
+            /* Empty state */
+            <div
+              style={{
+                background: 'var(--ms-bg-raised)',
+                border: '1px solid var(--ms-border)',
+                borderRadius: 'var(--ms-radius-md)',
+                padding: '3rem',
+                textAlign: 'center'
+              }}
+            >
+              <ShoppingCart size={40} style={{ color: 'var(--ms-text-muted)', marginBottom: '0.75rem' }} />
+              <p style={{ color: 'var(--ms-text-muted)', fontFamily: 'Outfit, sans-serif', fontSize: '1rem', margin: 0 }}>
+                Busca y agrega productos para iniciar una venta
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                background: 'var(--ms-bg-raised)',
+                border: '1px solid var(--ms-border)',
+                borderRadius: 'var(--ms-radius-md)',
+                overflow: 'hidden'
+              }}
+            >
+              {/* Cart header */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.6rem 0.75rem',
+                  borderBottom: '1px solid var(--ms-border)',
+                  background: 'var(--ms-bg-surface)'
+                }}
+              >
+                <div className="d-flex align-items-center gap-2">
+                  <ShoppingCart size={16} style={{ color: 'var(--ms-accent-light)' }} />
+                  <span style={{
+                    fontFamily: 'Outfit, sans-serif',
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    color: 'var(--ms-text-primary)'
+                  }}>
+                    Carrito ({salesItems.length})
+                  </span>
+                  {salesItems.length > 0 && (
+                    <span style={{
+                      fontSize: '0.65rem',
+                      color: 'var(--ms-green)',
+                      background: 'var(--ms-green-dim)',
+                      padding: '0.15rem 0.4rem',
+                      borderRadius: '4px'
+                    }}>
+                      Auto-guardado
+                    </span>
+                  )}
+                </div>
                 <button
-                  className="btn btn-primary"
+                  onClick={clearSale}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--ms-text-muted)',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                    padding: '0.2rem 0.4rem',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem'
+                  }}
+                >
+                  <Trash2 size={12} /> Vaciar
+                </button>
+              </div>
+
+              {/* Cart items */}
+              <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+                {salesItems.map((item, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0.6rem 0.75rem',
+                      borderBottom: '1px solid var(--ms-border)',
+                      gap: '0.5rem'
+                    }}
+                  >
+                    {/* Product info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem', lineHeight: 1.2 }}>
+                        {item.product.name}
+                      </div>
+                      <div style={{ color: 'var(--ms-text-muted)', fontSize: '0.72rem' }}>
+                        {item.product.brand}
+                        {item.product.color && ` / ${item.product.color}`}
+                      </div>
+                    </div>
+
+                    {/* Quantity controls */}
+                    <div className="d-flex align-items-center gap-1">
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => handleQuantityChange(index, item.quantity - 1)}
+                        disabled={item.quantity <= 1}
+                        style={{
+                          width: 26, height: 26, padding: 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'var(--ms-bg-surface)',
+                          border: '1px solid var(--ms-border)',
+                          color: 'var(--ms-text-secondary)',
+                          borderRadius: '4px'
+                        }}
+                      >
+                        <Minus size={12} />
+                      </button>
+                      <span style={{
+                        minWidth: 28, textAlign: 'center',
+                        fontWeight: 700, fontFamily: 'Outfit, sans-serif',
+                        fontSize: '0.9rem'
+                      }}>
+                        {item.quantity}
+                      </span>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => handleQuantityChange(index, item.quantity + 1)}
+                        disabled={item.quantity >= item.product.stock}
+                        style={{
+                          width: 26, height: 26, padding: 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'var(--ms-bg-surface)',
+                          border: '1px solid var(--ms-border)',
+                          color: 'var(--ms-text-secondary)',
+                          borderRadius: '4px'
+                        }}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
+
+                    {/* Price input */}
+                    <input
+                      type="number"
+                      value={item.unitPrice}
+                      min="0"
+                      step="100"
+                      onChange={(e) => handlePriceChange(index, parseInt(e.target.value) || 0)}
+                      style={{
+                        width: 80,
+                        background: 'var(--ms-bg-surface)',
+                        border: '1px solid var(--ms-border)',
+                        color: 'var(--ms-text-primary)',
+                        borderRadius: '4px',
+                        padding: '0.25rem 0.4rem',
+                        fontSize: '0.8rem',
+                        textAlign: 'right'
+                      }}
+                    />
+
+                    {/* 2x1 toggle */}
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        cursor: 'pointer',
+                        fontSize: '0.7rem',
+                        color: item.applyPromotion ? 'var(--ms-green)' : 'var(--ms-text-muted)',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        checked={item.applyPromotion}
+                        onChange={(e) => handlePromotionChange(index, e.target.checked)}
+                        style={{ width: 14, height: 14, margin: 0 }}
+                      />
+                      2x1
+                    </label>
+
+                    {/* Subtotal */}
+                    <div style={{
+                      minWidth: 72, textAlign: 'right',
+                      fontWeight: 700, fontFamily: 'Outfit, sans-serif',
+                      fontSize: '0.9rem', color: 'var(--ms-green)'
+                    }}>
+                      ${calculateItemSubtotal(item).toLocaleString()}
+                    </div>
+
+                    {/* Remove */}
+                    <button
+                      onClick={() => removeProductFromSale(index)}
+                      style={{
+                        background: 'none', border: 'none',
+                        color: 'var(--ms-text-muted)', cursor: 'pointer',
+                        padding: '0.2rem', borderRadius: '4px',
+                        display: 'flex', alignItems: 'center'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--ms-red)'}
+                      onMouseLeave={(e) => e.currentTarget.style.color = 'var(--ms-text-muted)'}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Totals */}
+              <div style={{ padding: '0.75rem', borderTop: '1px solid var(--ms-border)', background: 'var(--ms-bg-surface)' }}>
+                <div className="d-flex justify-content-between" style={{ fontSize: '0.82rem', color: 'var(--ms-text-muted)', marginBottom: '0.25rem' }}>
+                  <span>Subtotal</span>
+                  <span>${calculateSubtotal().toLocaleString()}</span>
+                </div>
+                {discount > 0 && (
+                  <div className="d-flex justify-content-between" style={{ fontSize: '0.82rem', color: 'var(--ms-green)', marginBottom: '0.25rem' }}>
+                    <span>Descuento 2x1</span>
+                    <span>-${discount.toLocaleString()}</span>
+                  </div>
+                )}
+                <div
+                  className="d-flex justify-content-between align-items-center"
+                  style={{
+                    paddingTop: '0.5rem',
+                    marginTop: '0.25rem',
+                    borderTop: '1px solid var(--ms-border)'
+                  }}
+                >
+                  <span style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 700, fontSize: '1.1rem' }}>TOTAL</span>
+                  <span style={{
+                    fontFamily: 'Outfit, sans-serif',
+                    fontWeight: 800,
+                    fontSize: '1.6rem',
+                    color: 'var(--ms-green)',
+                    letterSpacing: '-0.03em'
+                  }}>
+                    ${calculateTotal().toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Payment method */}
+              <div style={{ padding: '0.75rem', borderTop: '1px solid var(--ms-border)' }}>
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <span style={{ fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif', fontWeight: 500, color: 'var(--ms-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Metodo de pago
+                  </span>
+                  {payments.length === 1 && (
+                    <span style={{ fontSize: '0.7rem', color: 'var(--ms-text-muted)' }}>
+                      Toca para dividir pago
+                    </span>
+                  )}
+                </div>
+
+                {payments.length === 1 ? (
+                  /* Single payment - simple button group */
+                  <div className="d-flex gap-2 mb-2">
+                    {PAYMENT_OPTIONS.map(opt => (
+                      <button
+                        key={opt.key}
+                        onClick={() => updatePaymentMethod(0, opt.key)}
+                        style={{
+                          flex: 1,
+                          padding: '0.5rem 0.25rem',
+                          borderRadius: 'var(--ms-radius-sm)',
+                          border: payments[0].method === opt.key ? '2px solid var(--ms-accent)' : '1px solid var(--ms-border)',
+                          background: payments[0].method === opt.key ? 'var(--ms-accent-dim)' : 'var(--ms-bg-surface)',
+                          color: payments[0].method === opt.key ? 'var(--ms-accent-light)' : 'var(--ms-text-muted)',
+                          cursor: 'pointer',
+                          fontFamily: 'Outfit, sans-serif',
+                          fontWeight: 600,
+                          fontSize: '0.78rem',
+                          transition: 'all 0.15s ease',
+                          textAlign: 'center'
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  /* Multiple payments */
+                  <div className="mb-2">
+                    {payments.map((p, idx) => (
+                      <div key={idx} className="d-flex align-items-center gap-2 mb-2">
+                        <select
+                          className="form-select form-select-sm"
+                          style={{ maxWidth: 140, background: 'var(--ms-bg-surface)', border: '1px solid var(--ms-border)', color: 'var(--ms-text-primary)', fontSize: '0.8rem' }}
+                          value={p.method}
+                          onChange={(e) => updatePaymentMethod(idx, e.target.value as PaymentMethod)}
+                        >
+                          {PAYMENT_OPTIONS.map(opt => (
+                            <option key={opt.key} value={opt.key}>{opt.label}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          style={{ maxWidth: 120, background: 'var(--ms-bg-surface)', border: '1px solid var(--ms-border)', color: 'var(--ms-text-primary)', fontSize: '0.8rem' }}
+                          value={p.amount}
+                          min={0}
+                          step={100}
+                          onChange={(e) => updatePaymentAmount(idx, parseInt(e.target.value) || 0)}
+                        />
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => removePaymentLine(idx)}
+                          style={{ color: 'var(--ms-red)', background: 'none', border: 'none', padding: '0.2rem' }}
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="d-flex justify-content-between" style={{ fontSize: '0.75rem' }}>
+                      <span style={{ color: paymentsTotal === totalAmount() ? 'var(--ms-green)' : 'var(--ms-red)' }}>
+                        Asignado: ${paymentsTotal.toLocaleString()} / ${totalAmount().toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Split payment toggle */}
+                {payments.length === 1 && (
+                  <div className="d-flex gap-1 mb-3">
+                    {PAYMENT_OPTIONS.filter(o => o.key !== payments[0].method).map(opt => (
+                      <button
+                        key={opt.key}
+                        className="btn btn-sm"
+                        onClick={() => addPaymentLine(opt.key)}
+                        style={{
+                          fontSize: '0.7rem',
+                          padding: '0.2rem 0.5rem',
+                          background: 'var(--ms-bg-surface)',
+                          color: 'var(--ms-text-muted)',
+                          border: '1px solid var(--ms-border)',
+                          borderRadius: '4px'
+                        }}
+                      >
+                        + {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {paymentsTotal !== totalAmount() && payments.length > 1 && (
+                  <div style={{ color: 'var(--ms-red)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>
+                    La suma de los pagos debe coincidir con el total.
+                  </div>
+                )}
+
+                {/* Customer */}
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  {selectedCustomer ? (
+                    <div
+                      className="d-flex align-items-center justify-content-between flex-grow-1"
+                      style={{
+                        background: 'var(--ms-bg-surface)',
+                        padding: '0.4rem 0.6rem',
+                        borderRadius: 'var(--ms-radius-sm)',
+                        border: '1px solid var(--ms-border)'
+                      }}
+                    >
+                      <div>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{selectedCustomer.name}</span>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--ms-text-muted)', marginLeft: '0.5rem' }}>
+                          {selectedCustomer.cuit_dni}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setSelectedCustomer(null)}
+                        style={{ background: 'none', border: 'none', color: 'var(--ms-text-muted)', cursor: 'pointer', padding: '0.1rem' }}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn btn-sm flex-grow-1"
+                      onClick={() => setShowCustomerForm(true)}
+                      style={{
+                        background: 'var(--ms-bg-surface)',
+                        border: '1px solid var(--ms-border)',
+                        color: 'var(--ms-text-muted)',
+                        fontSize: '0.8rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.4rem'
+                      }}
+                    >
+                      <User size={14} /> Agregar cliente (opcional)
+                    </button>
+                  )}
+                </div>
+
+                {/* THE BIG SELL BUTTON */}
+                <button
                   onClick={handleProcessSale}
                   disabled={isLoading || salesItems.length === 0}
-                  title={salesItems.length === 0 ? 'Agrega productos al carrito' : 'Registrar la venta'}
+                  style={{
+                    width: '100%',
+                    padding: '0.9rem',
+                    borderRadius: 'var(--ms-radius-md)',
+                    border: 'none',
+                    background: isLoading ? 'var(--ms-bg-overlay)' : 'linear-gradient(135deg, var(--ms-green) 0%, #00b894 100%)',
+                    color: isLoading ? 'var(--ms-text-muted)' : 'var(--ms-text-inverse)',
+                    fontFamily: 'Outfit, sans-serif',
+                    fontWeight: 700,
+                    fontSize: '1.1rem',
+                    cursor: isLoading ? 'wait' : 'pointer',
+                    boxShadow: isLoading ? 'none' : '0 4px 20px rgba(0, 206, 201, 0.3)',
+                    transition: 'all 0.2s ease',
+                    letterSpacing: '-0.01em'
+                  }}
                 >
-                  {isLoading ? 'Procesando…' : `Registrar Venta (${calculateTotal().toLocaleString()})`}
-                </button>
-                <button
-                  className="btn btn-outline-secondary"
-                  onClick={clearSale}
-                  disabled={isLoading || salesItems.length === 0}
-                >
-                  Vaciar Carrito
+                  {isLoading ? 'Procesando...' : `Registrar Venta  $${calculateTotal().toLocaleString()}`}
                 </button>
               </div>
             </div>
-          </div>
+          )}
+
+          {error && (
+            <div
+              className="mt-2"
+              style={{
+                background: 'var(--ms-red-dim)',
+                border: '1px solid rgba(255,107,107,0.2)',
+                borderRadius: 'var(--ms-radius-sm)',
+                padding: '0.6rem 0.75rem',
+                color: 'var(--ms-red)',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <AlertCircle size={16} />
+              {error}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Modal de Cliente */}
+      {/* Customer Modal */}
       {showCustomerForm && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
           <div className="modal-dialog">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">👤 Agregar Cliente</h5>
+            <div className="modal-content" style={{ background: 'var(--ms-bg-raised)', border: '1px solid var(--ms-border)' }}>
+              <div className="modal-header" style={{ borderBottom: '1px solid var(--ms-border)' }}>
+                <h5 className="modal-title" style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 600 }}>Agregar Cliente</h5>
                 <button
                   type="button"
                   className="btn-close"
@@ -819,24 +1066,30 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
         </div>
       )}
 
-      {/* Drawer lateral de Ticket (Offcanvas) */}
+      {/* Ticket Drawer */}
       {showTicket && ticketData && (
         <>
-          {/* Backdrop */}
           <div
             className="offcanvas-backdrop fade show"
             onClick={() => setShowTicket(false)}
-            style={{ zIndex: 1040 }}
+            style={{ zIndex: 1040, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
           />
-          {/* Panel derecho */}
           <div
             className="offcanvas offcanvas-end show"
             tabIndex={-1}
-            style={{ visibility: 'visible', width: '520px', zIndex: 1045 }}
+            style={{
+              visibility: 'visible',
+              width: '520px',
+              zIndex: 1045,
+              background: 'var(--ms-bg-raised)',
+              borderLeft: '1px solid var(--ms-border)'
+            }}
             aria-modal="true" role="dialog"
           >
-            <div className="offcanvas-header">
-              <h5 className="offcanvas-title">🧾 Ticket de Venta</h5>
+            <div className="offcanvas-header" style={{ borderBottom: '1px solid var(--ms-border)' }}>
+              <h5 className="offcanvas-title" style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 600 }}>
+                Ticket de Venta
+              </h5>
               <button type="button" className="btn-close" aria-label="Close" onClick={() => setShowTicket(false)} />
             </div>
             <div className="offcanvas-body">
@@ -846,8 +1099,19 @@ const SalesWorkspace = ({ cashSession, onSaleRegistered }: SalesWorkspaceProps) 
                 onPrint={() => window.print()}
               />
             </div>
-            <div className="border-top p-3 d-flex justify-content-end">
-              <button className="btn btn-secondary" onClick={() => setShowTicket(false)}>Cerrar</button>
+            <div style={{ borderTop: '1px solid var(--ms-border)', padding: '0.75rem', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                className="btn"
+                onClick={() => setShowTicket(false)}
+                style={{
+                  background: 'var(--ms-bg-surface)',
+                  border: '1px solid var(--ms-border)',
+                  color: 'var(--ms-text-secondary)',
+                  fontSize: '0.85rem'
+                }}
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </>

@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Vendor, CashSession, getActiveCashSession, openCashSession, closeCashSession } from '@/services/vendorService';
-import CashOpeningForm from './CashOpeningForm';
+import { Vendor, CashSession, getActiveCashSession, openCashSession } from '@/services/vendorService';
 import SalesWorkspace from './SalesWorkspace';
 import CashClosingForm from './CashClosingForm';
-import { DollarSign, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 interface VendorDashboardProps {
   vendor: Vendor;
@@ -15,29 +14,34 @@ const VendorDashboard = ({ vendor }: VendorDashboardProps) => {
   const [cashSession, setCashSession] = useState<CashSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showClosing, setShowClosing] = useState(false);
 
   useEffect(() => {
-    const fetchCashSession = async () => {
+    const initSession = async () => {
       setIsLoading(true);
       try {
-        const session = await getActiveCashSession(vendor.id);
+        // Try to get existing active session
+        let session = await getActiveCashSession(vendor.id);
+
+        // Auto-open with $0 if no session exists
+        if (!session) {
+          session = await openCashSession(vendor.id, 0);
+        }
+
         setCashSession(session);
       } catch (error) {
-        console.error('Error fetching cash session:', error);
+        console.error('Error initializing cash session:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchCashSession();
+    initSession();
   }, [vendor.id, refreshKey]);
-
-  const handleCashOpened = (session: CashSession) => {
-    setCashSession(session);
-  };
 
   const handleCashClosed = () => {
     setCashSession(null);
+    setShowClosing(false);
     setRefreshKey(prev => prev + 1);
   };
 
@@ -47,9 +51,20 @@ const VendorDashboard = ({ vendor }: VendorDashboardProps) => {
 
   if (isLoading) {
     return (
-      <div className="text-center py-4">
-        <div className="spinner-border" role="status">
-          <span className="visually-hidden">Cargando sesión...</span>
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '300px' }}>
+        <div className="spinner-border" style={{ color: 'var(--ms-accent)' }} role="status">
+          <span className="visually-hidden">Cargando...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!cashSession) {
+    return (
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '300px' }}>
+        <div className="text-center">
+          <div className="spinner-border mb-3" style={{ color: 'var(--ms-accent)' }} role="status" />
+          <p style={{ color: 'var(--ms-text-muted)' }}>Iniciando sesion de venta...</p>
         </div>
       </div>
     );
@@ -57,70 +72,76 @@ const VendorDashboard = ({ vendor }: VendorDashboardProps) => {
 
   return (
     <div>
-      {/* Contenido principal según estado de la caja */}
-      {!cashSession ? (
-        // Formulario de apertura de caja
-        <CashOpeningForm 
-          vendor={vendor} 
-          onCashOpened={handleCashOpened}
-        />
-      ) : (
-        <>
-          {/* Resumen de Caja Súper Compacto */}
-          <div className="row mb-2">
-            <div className="col-12">
-              <div className="card border-0 shadow-sm">
-                <div className="card-body p-2">
-                  <div className="row g-2 align-items-center text-center">
-                    <div className="col-md-2">
-                      <small className="text-muted d-block">Apertura</small>
-                      <strong className="text-success">${cashSession.opening_cash.toLocaleString('es-CL')}</strong>
-                    </div>
-                    <div className="col-md-2">
-                      <small className="text-muted d-block">Total Ventas</small>
-                      <strong className="text-primary">${cashSession.total_sales.toLocaleString('es-CL')}</strong>
-                    </div>
-                    <div className="col-md-2">
-                      <small className="text-muted d-block">💵 Efectivo</small>
-                      <strong className="text-success">${cashSession.cash_sales.toLocaleString('es-CL')}</strong>
-                    </div>
-                    <div className="col-md-2">
-                      <small className="text-muted d-block">💳 Tarjeta</small>
-                      <strong className="text-info">${cashSession.card_sales.toLocaleString('es-CL')}</strong>
-                    </div>
-                    <div className="col-md-2">
-                      <small className="text-muted d-block">📱 Digital</small>
-                      <strong className="text-primary">${cashSession.digital_sales.toLocaleString('es-CL')}</strong>
-                    </div>
-                    <div className="col-md-2">
-                      <small className="text-muted d-block">💰 A Rendir</small>
-                      <strong className="text-warning">${cashSession.cash_to_render.toLocaleString('es-CL')}</strong>
-                    </div>
-                  </div>
-                </div>
-              </div>
+      {/* Compact session status bar */}
+      <div
+        className="mb-3 ms-animate-in"
+        style={{
+          background: 'var(--ms-bg-raised)',
+          border: '1px solid var(--ms-border)',
+          borderRadius: 'var(--ms-radius-md)',
+          padding: '0.6rem 1rem'
+        }}
+      >
+        <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div className="d-flex align-items-center gap-3 flex-wrap">
+            <div className="d-flex align-items-center gap-2">
+              <div style={{
+                width: 8, height: 8,
+                borderRadius: '50%',
+                background: 'var(--ms-green)',
+                boxShadow: '0 0 8px var(--ms-green)'
+              }} />
+              <span style={{ color: 'var(--ms-text-muted)', fontSize: '0.8rem' }}>Caja Activa</span>
             </div>
+            <div style={{ height: 16, width: 1, background: 'var(--ms-border)' }} />
+            <span style={{ color: 'var(--ms-text-muted)', fontSize: '0.8rem' }}>
+              Apertura: <strong style={{ color: 'var(--ms-green)' }}>${cashSession.opening_cash.toLocaleString('es-CL')}</strong>
+            </span>
+            <span style={{ color: 'var(--ms-text-muted)', fontSize: '0.8rem' }}>
+              Ventas: <strong style={{ color: 'var(--ms-accent-light)' }}>${cashSession.total_sales.toLocaleString('es-CL')}</strong>
+            </span>
+            <span style={{ color: 'var(--ms-text-muted)', fontSize: '0.8rem' }}>
+              Efectivo: <strong style={{ color: 'var(--ms-green)' }}>${cashSession.cash_sales.toLocaleString('es-CL')}</strong>
+            </span>
+            <span style={{ color: 'var(--ms-text-muted)', fontSize: '0.8rem' }}>
+              Tarjeta: <strong style={{ color: 'var(--ms-blue)' }}>${cashSession.card_sales.toLocaleString('es-CL')}</strong>
+            </span>
+            <span style={{ color: 'var(--ms-text-muted)', fontSize: '0.8rem' }}>
+              Digital: <strong style={{ color: 'var(--ms-accent-light)' }}>${cashSession.digital_sales.toLocaleString('es-CL')}</strong>
+            </span>
           </div>
+          <button
+            className="btn btn-sm"
+            onClick={() => setShowClosing(!showClosing)}
+            style={{
+              background: showClosing ? 'var(--ms-red-dim)' : 'var(--ms-bg-surface)',
+              color: showClosing ? 'var(--ms-red)' : 'var(--ms-text-muted)',
+              border: `1px solid ${showClosing ? 'rgba(255,107,107,0.3)' : 'var(--ms-border)'}`,
+              fontSize: '0.8rem',
+              padding: '0.3rem 0.75rem'
+            }}
+          >
+            {showClosing ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            <span className="ms-1">Cerrar Caja</span>
+          </button>
+        </div>
+      </div>
 
-          <div className="row">
-            {/* Panel de Ventas - Ahora ocupa todo el ancho */}
-            <div className="col-12 mb-4">
-              <SalesWorkspace 
-                cashSession={cashSession}
-                onSaleRegistered={handleSaleRegistered}
-              />
-            </div>
-
-            {/* Formulario de cierre de caja */}
-            <div className="col-12">
-              <CashClosingForm 
-                cashSession={cashSession}
-                onCashClosed={handleCashClosed}
-              />
-            </div>
-          </div>
-        </>
+      {/* Closing form (collapsible) */}
+      {showClosing && (
+        <div className="mb-3 ms-animate-in">
+          <CashClosingForm
+            cashSession={cashSession}
+            onCashClosed={handleCashClosed}
+          />
+        </div>
       )}
+
+      {/* Main Sales Workspace */}
+      <SalesWorkspace
+        cashSession={cashSession}
+        onSaleRegistered={handleSaleRegistered}
+      />
     </div>
   );
 };

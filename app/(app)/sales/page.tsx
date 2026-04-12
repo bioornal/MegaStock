@@ -6,7 +6,7 @@ export const runtime = 'nodejs'
 import { useState, useEffect } from 'react';
 import { getActiveVendors, Vendor } from '@/services/vendorService';
 import VendorDashboard from '@/components/VendorDashboard';
-import { Users, ShoppingCart } from 'lucide-react';
+import { ShoppingCart } from 'lucide-react';
 
 const SalesPage = () => {
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -18,7 +18,6 @@ const SalesPage = () => {
       try {
         const data = await getActiveVendors();
         setVendors(data);
-        // Seleccionar primer vendedor por defecto
         if (data.length > 0) {
           setSelectedVendor(data[0]);
         }
@@ -34,8 +33,8 @@ const SalesPage = () => {
 
   if (isLoading) {
     return (
-      <div className="text-center py-5">
-        <div className="spinner-border" role="status">
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+        <div className="spinner-border" style={{ color: 'var(--ms-accent)' }} role="status">
           <span className="visually-hidden">Cargando...</span>
         </div>
       </div>
@@ -44,25 +43,31 @@ const SalesPage = () => {
 
   if (vendors.length === 0) {
     return (
-      <div className="container-fluid py-4">
-        <div className="row justify-content-center">
-          <div className="col-md-6">
-            <div className="card shadow-sm">
-              <div className="card-body text-center py-5">
-                <Users size={48} className="text-muted mb-3" />
-                <h5>No hay vendedores registrados</h5>
-                <p className="text-muted">Contacta al administrador para registrar vendedores.</p>
-              </div>
-            </div>
-          </div>
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+        <div
+          className="text-center"
+          style={{
+            background: 'var(--ms-bg-raised)',
+            border: '1px solid var(--ms-border)',
+            borderRadius: 'var(--ms-radius-lg)',
+            padding: '3rem',
+            maxWidth: '400px'
+          }}
+        >
+          <ShoppingCart size={40} style={{ color: 'var(--ms-text-muted)', marginBottom: '1rem' }} />
+          <h5 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 600, marginBottom: '0.5rem' }}>
+            Sin vendedores
+          </h5>
+          <p style={{ color: 'var(--ms-text-muted)', fontSize: '0.9rem', margin: 0 }}>
+            Contacta al administrador para registrar vendedores.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container-fluid py-2">
-      {/* Dashboard del vendedor (siempre el primero disponible) */}
+    <div className="py-2 px-1">
       {selectedVendor && (
         <VendorDashboard vendor={selectedVendor} />
       )}
