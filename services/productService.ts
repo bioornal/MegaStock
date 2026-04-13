@@ -6,6 +6,7 @@ export interface Product {
   brand: string;
   color?: string; // Color es opcional para productos existentes
   stock: number;
+  stock_armado: number;
   price: number;
   cost: number;
   image: string;

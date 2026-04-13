@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, KeyboardEvent, useCallback } from 'react';
+import { useState, useEffect, useMemo, KeyboardEvent, useCallback, useRef } from 'react';
 import { Product, getProducts, updateProduct, deleteProduct } from '@/services/productService';
 import { BRANDS } from '@/lib/productOptions';
 import { Edit, Trash2, Check, X, Search, Filter, ChevronLeft, ChevronRight, Printer, FileDown } from 'lucide-react';
@@ -22,6 +22,9 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
   const [editFormData, setEditFormData] = useState<Partial<Product>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
+  const [editingArmadoId, setEditingArmadoId] = useState<number | null>(null);
+  const [editingArmadoValue, setEditingArmadoValue] = useState<number>(0);
+  const skipBlurRef = useRef(false);
 
   // Estados para paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,6 +71,37 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setEditingId(null);
+    }
+  };
+
+  // Guardar stock_armado inline, opcionalmente abriendo la siguiente fila
+  const handleSaveArmado = async (product: Product, nextProduct?: Product) => {
+    try {
+      await updateProduct(product.id, { stock_armado: editingArmadoValue });
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, stock_armado: editingArmadoValue } : p));
+      setCachedProducts(products.map(p => p.id === product.id ? { ...p, stock_armado: editingArmadoValue } : p));
+      if (nextProduct) {
+        setEditingArmadoId(nextProduct.id);
+        setEditingArmadoValue(nextProduct.stock_armado || 0);
+      } else {
+        setEditingArmadoId(null);
+      }
+    } catch {
+      alert('Error al actualizar stock armado.');
+    }
+  };
+
+  const handleArmadoKeyDown = (e: KeyboardEvent<HTMLInputElement>, product: Product) => {
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      skipBlurRef.current = true;
+      const currentIndex = currentProducts.findIndex(p => p.id === product.id);
+      const nextProduct = currentProducts[currentIndex + 1];
+      handleSaveArmado(product, nextProduct);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      skipBlurRef.current = true;
+      setEditingArmadoId(null);
     }
   };
 
@@ -424,6 +458,8 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
               <th>Marca</th>
               <th>Color</th>
               <th>Stock</th>
+              <th>Armado</th>
+              <th>Desarmado</th>
               <th>Precio</th>
               <th className="text-center">Acciones</th>
             </tr>
@@ -435,6 +471,34 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
                 <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.brand} onChange={(e) => setEditFormData({ ...editFormData, brand: e.target.value })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : product.brand}</td>
                 <td>{editingId === product.id ? <input type="text" className="form-control form-control-sm" value={editFormData.color || ''} onChange={(e) => setEditFormData({ ...editFormData, color: e.target.value })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : (product.color || '-')}</td>
                 <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.stock} onChange={(e) => setEditFormData({ ...editFormData, stock: parseInt(e.target.value) })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : product.stock}</td>
+                <td>
+                  {editingArmadoId === product.id ? (
+                    <input
+                      type="number"
+                      className="form-control form-control-sm"
+                      value={editingArmadoValue}
+                      onChange={(e) => setEditingArmadoValue(parseInt(e.target.value) || 0)}
+                      onKeyDown={(e) => handleArmadoKeyDown(e, product)}
+                      onBlur={() => {
+                        if (skipBlurRef.current) { skipBlurRef.current = false; return; }
+                        handleSaveArmado(product);
+                      }}
+                      autoFocus
+                      style={{ width: '70px' }}
+                    />
+                  ) : (
+                    <span
+                      tabIndex={0}
+                      style={{ cursor: 'pointer', textDecoration: 'underline dotted', outline: 'none' }}
+                      title="Click o Tab para editar"
+                      onClick={() => { setEditingArmadoId(product.id); setEditingArmadoValue(product.stock_armado || 0); }}
+                      onFocus={() => { setEditingArmadoId(product.id); setEditingArmadoValue(product.stock_armado || 0); }}
+                    >
+                      {product.stock_armado || 0}
+                    </span>
+                  )}
+                </td>
+                <td>{product.stock - (product.stock_armado || 0)}</td>
                 <td>{editingId === product.id ? <input type="number" className="form-control form-control-sm" value={editFormData.price} onChange={(e) => setEditFormData({ ...editFormData, price: parseFloat(e.target.value) })} onKeyDown={(e) => handleKeyDown(e, product.id)} /> : `$${product.price.toLocaleString('es-CL')}`}</td>
 
                 <td className="text-center">
