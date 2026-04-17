@@ -121,20 +121,21 @@ const ProductTable = ({ onProductsChange }: ProductTableProps) => {
       return;
     }
     try {
-      const password = prompt("Para actualizar este producto, por favor introduce la contraseña:");
-      if (password === "110685") {
-        await updateProduct(id, editFormData as Product);
-      } else if (password !== null) {
-        alert("Contraseña incorrecta.");
-        return;
-      } else {
-        return;
-      }
+      const dataToUpdate = {
+        name: editFormData.name,
+        brand: editFormData.brand,
+        color: editFormData.color,
+        stock: isNaN(editFormData.stock as number) ? 0 : editFormData.stock,
+        price: isNaN(editFormData.price as number) ? 0 : editFormData.price,
+      };
+
+      await updateProduct(id, dataToUpdate);
       setEditingId(null);
       loadProducts(false); // Forzar recarga sin cache
       onProductsChange?.();
-    } catch (error) {
-      alert('Error al actualizar el producto.');
+    } catch (error: any) {
+      console.error(error);
+      alert('Error al actualizar el producto: ' + (error.message || JSON.stringify(error)));
     }
   };
 
